@@ -1,4 +1,5 @@
-"""D35: Szenario-Skripte laden, pruefen und abspielen (Spec docs/superpowers/specs/2026-10-14-szenarien-design.md)."""
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""D35: Szenario-Skripte laden, pruefen und abspielen."""
 import copy
 import inspect
 import json
@@ -440,7 +441,7 @@ class _Spieler:
         optionen = {k: v for k, v in wert.items() if k != "art"}
         name = optionen.pop("name", None) if art in ("coverage", "flow") else None
         if art in self.laufend:
-            # Spec 3: die erste Datei bleibt im Ergebnis - also erst regulaer beenden (bei Fehler bleibt der Eintrag
+            # die erste Datei bleibt im Ergebnis - also erst regulaer beenden (bei Fehler bleibt der Eintrag
             # in laufend und _aufraeumen versucht es noch einmal)
             alt = self.laufend[art]
             alt["dateien"] = self._stoppe(art)

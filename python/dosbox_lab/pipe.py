@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """JSON-RPC 2.0 ueber die Named Pipe des Emulators (JSON Lines)."""
 import json
 import threading

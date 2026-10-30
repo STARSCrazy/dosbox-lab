@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Emulator-Instanzen starten, wiederfinden und beenden."""
 import ctypes
 import json

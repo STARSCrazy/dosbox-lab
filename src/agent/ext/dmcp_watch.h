@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 #ifndef DOSBOX_DMCP_WATCH_H
 #define DOSBOX_DMCP_WATCH_H
 

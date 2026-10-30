@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Kommandozeile: duenne Huelle ueber die Bibliothek. Ausgabe immer JSON."""
 import argparse
 import json

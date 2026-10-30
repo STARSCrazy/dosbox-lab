@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """MCP-Server (stdio) fuer dosbox-lab. Start: python -m dosbox_lab.mcp_server"""
 import json
 from typing import Optional
@@ -348,7 +349,7 @@ def mouse_state(instanz: Optional[str] = None) -> dict:
 
 @mcp.tool()
 def input_own(an: bool, instanz: Optional[str] = None) -> dict:
-    """an=True: echte Maus/Tastatur im Emulatorfenster ignorieren (Standard). False: Manuel darf mitspielen."""
+    """an=True: echte Maus/Tastatur im Emulatorfenster ignorieren (Standard). False: a human may play along."""
     return _box(instanz).own_input(an)
 
 

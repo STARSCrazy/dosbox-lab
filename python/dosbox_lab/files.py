@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Lesehilfen fuer die Aufzeichnungsdateien (auch fuer externe Werkzeuge nutzbar)."""
 import json
 import struct
@@ -10,7 +11,7 @@ def read_jsonl(path):
 
 
 def read_coverage(path):
-    """DMCV-Datei (Spec 5.7) -> {linear_start: bitmap (8192 Byte)}."""
+    """DMCV-Datei -> {linear_start: bitmap (8192 Byte)}."""
     data = Path(path).read_bytes()
     if data[:4] != b"DMCV":
         raise ValueError(f"{path}: keine DMCV-Datei")

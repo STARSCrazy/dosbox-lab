@@ -1,4 +1,5 @@
-"""Momentaufnahmen (Spec 5.8): Speicher, Register, Deskriptoren, Paging und Bild in einem Verzeichnis."""
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""Momentaufnahmen: Speicher, Register, Deskriptoren, Paging und Bild in einem Verzeichnis."""
 import hashlib
 import json
 import os

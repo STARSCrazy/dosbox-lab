@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Minimaler PNG-Leser fuer die vom Emulator geschriebenen Bilder (8-Bit RGB, Filter 0)."""
 import struct
 import zlib

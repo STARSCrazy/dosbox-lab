@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Hohe Ebene: eine Methode pro Emulator-Funktion."""
 import hashlib
 import json

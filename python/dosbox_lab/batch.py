@@ -1,4 +1,5 @@
-"""run_batch: einen DOS-Befehl headless ausfuehren, Exit-Code, Ausgaben und Dateien einsammeln (Spec 5.9)."""
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""run_batch: einen DOS-Befehl headless ausfuehren, Exit-Code, Ausgaben und Dateien einsammeln."""
 import json
 import os
 import time
