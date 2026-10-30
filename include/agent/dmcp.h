@@ -1,7 +1,7 @@
 #ifndef DOSBOX_AGENT_DMCP_H
 #define DOSBOX_AGENT_DMCP_H
 
-// DOSBOX-MCP agent extension. Only compiled with C_DMCP (see build.ps1).
+// dosbox-lab agent extension. Only compiled with C_DMCP (see build.ps1).
 #if defined(C_DMCP)
 #include <string>
 #include <cstdint>
@@ -12,7 +12,7 @@ extern bool DMCP_hook_active;
 // Emulation thread. True while a func run (D31) holds hardware IRQs back (checked in PIC_runIRQs).
 extern bool DMCP_irq_hold;
 
-// Transport thread: handles DOSBOX-MCP methods. Returns false if the method is not ours.
+// Transport thread: handles dosbox-lab methods. Returns false if the method is not ours.
 bool DMCP_HandleRequest(const std::string& request, std::string* response);
 // Emulation thread, top of Normal_Loop. true = paused, skip this loop iteration.
 bool DMCP_LoopHook();

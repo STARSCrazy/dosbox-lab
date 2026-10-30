@@ -220,7 +220,7 @@ bool SaveStateFile(const std::string& name, const JsonValue* aufruf, std::string
     if (!VerifyStateZip(path, &why))
         return Fail(error, "internal", "savestate was not written correctly (" + why + "): " + path);
     JsonValue info = JsonValue::Object();
-    Set(&info, "format", Str("dosbox-mcp-state/1"));
+    Set(&info, "format", Str("dosbox-lab-state/1"));
     Set(&info, "speicher_seiten", Num(static_cast<uint64_t>(MEM_TotalPages())));
     Set(&info, "maschine", Num(static_cast<uint64_t>(static_cast<int>(machine))));
     Set(&info, "version", Str(VERSION));
@@ -278,7 +278,7 @@ bool LoadStateFile(const std::string& path, bool unchecked, JsonValue* sidecar, 
         unsigned long long pages = 0, mach = 0;
         if (!dosbox_agent::AGENT_ParseJson(text, sidecar, &perr) || !SidecarNumber(*sidecar, "speicher_seiten", &pages) ||
             !SidecarNumber(*sidecar, "maschine", &mach))
-            return Fail(error, "bad_argument", "sidecar " + info_path + " is not a dosbox-mcp-state/1 file");
+            return Fail(error, "bad_argument", "sidecar " + info_path + " is not a dosbox-lab-state/1 file");
         if (pages != MEM_TotalPages())
             return Fail(error, "bad_argument", "speicher: savestate has " + std::to_string(pages) +
                                                    " pages, this instance " + std::to_string(MEM_TotalPages()));

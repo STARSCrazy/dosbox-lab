@@ -7,7 +7,7 @@ from tests.util import TESTPROGS, need_build
 @need_build
 class McpTest(unittest.TestCase):
     def test_tools_listed_and_callable(self):
-        from dosbox_mcp import mcp_server
+        from dosbox_lab import mcp_server
 
         tools = asyncio.run(mcp_server.mcp.list_tools())
         names = {t.name for t in tools}
@@ -35,7 +35,7 @@ class McpTest(unittest.TestCase):
             mcp_server.dosbox_stop(started["instanz"])
 
     def test_debug_tools(self):
-        from dosbox_mcp import mcp_server
+        from dosbox_lab import mcp_server
         started = mcp_server.dosbox_start(str(TESTPROGS), ["DEBUG.COM"], headless=True)
         inst = started["instanz"]
         try:

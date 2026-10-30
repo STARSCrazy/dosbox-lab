@@ -1,8 +1,8 @@
 import unittest
 from pathlib import Path
 
-from dosbox_mcp import DmcpError
-from dosbox_mcp.files import read_jsonl
+from dosbox_lab import DmcpError
+from dosbox_lab.files import read_jsonl
 from tests.util import class_box, need_build, prog_psp, start_prog, wait_until
 
 

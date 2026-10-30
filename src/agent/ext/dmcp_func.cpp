@@ -454,7 +454,7 @@ void Finish()
     g.active = false;
     DMCP_irq_hold = false;
     JsonValue r = JsonValue::Object();
-    Set(&r, "format", Str("dosbox-mcp-func/1"));
+    Set(&r, "format", Str("dosbox-lab-func/1"));
     Set(&r, "zustand", Str(g.zustand));
     Set(&r, "call_id", Num(g.call_id));
     const std::string ende = g.ende.empty() ? "unterbrochen" : g.ende;

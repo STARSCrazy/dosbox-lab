@@ -41,7 +41,7 @@
 #include "bios_disk.h"
 #include "imagedisk_eltorito.h"
 #if defined(C_DMCP)
-#include "agent/dmcp.h" // DOSBOX-MCP hook: run_batch output capture
+#include "agent/dmcp.h" // DOSBOX-LAB hook: run_batch output capture
 #endif
 
 #define DOS_FILESTART 4
@@ -842,7 +842,7 @@ bool DOS_ReadFile(uint16_t entry,uint8_t * data,uint16_t * amount,bool fcb) {
 bool DOS_WriteFile(uint16_t entry,const uint8_t * data,uint16_t * amount,bool fcb) {
 	if (dos_kernel_disabled) E_Exit("Attempt to write to DOS file handle while guest OS is running");
 #if defined(C_DMCP)
-	DMCP_DosWriteScope dmcp_write(entry, data, *amount, fcb); // DOSBOX-MCP hook: run_batch stdout/stderr capture
+	DMCP_DosWriteScope dmcp_write(entry, data, *amount, fcb); // DOSBOX-LAB hook: run_batch stdout/stderr capture
 #endif
 
 	uint32_t handle = fcb?entry:RealHandle(entry);

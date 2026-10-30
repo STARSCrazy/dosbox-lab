@@ -3,7 +3,7 @@ import shutil
 import unittest
 from pathlib import Path
 
-from dosbox_mcp import Dosbox, Mount
+from dosbox_lab import Dosbox, Mount
 from tests.util import TESTPROGS, US, batch_workdir, need_build, run_typed, wait_prompt, wait_until
 
 

@@ -42,7 +42,7 @@
 #endif
 
 #if defined(C_DMCP)
-#include "agent/dmcp.h" // DOSBOX-MCP hook: exec/exit events
+#include "agent/dmcp.h" // DOSBOX-LAB hook: exec/exit events
 #endif
 
 #if defined(OSFREE)
@@ -120,7 +120,7 @@ void DOS_Terminate(uint16_t pspseg,bool tsr,uint8_t exitcode) {
 	DOS_PSP curpsp(pspseg);
 	if (pspseg==curpsp.GetParent()) return;
 #if defined(C_DMCP)
-	DMCP_OnExit(pspseg, tsr, exitcode); // DOSBOX-MCP hook: exit event
+	DMCP_OnExit(pspseg, tsr, exitcode); // DOSBOX-LAB hook: exit event
 #endif
 	/* the UTF-8 modes of the AMIS providers end with the process */
 	DOS_UTF8_ProcessEnded(pspseg);
@@ -841,7 +841,7 @@ bool DOS_Execute(const char* name, PhysPt block_pt, uint16_t flags) {
 		reg_ax = 0;             // Testing with MS-DOS (6.22) shows that if INT 21 AX=4B is called with the overlay flag (AL==3), then AX and DX are 0 on return.
 		reg_dx = 0;
 #if defined(C_DMCP)
-		DMCP_OnExec(name, flags, false, dos.psp(), loadseg, block.overlay.relocation, ((iscom ? (uint32_t)readsize : memimagesize) + 15u) / 16u, 0, 0); // DOSBOX-MCP hook: exec event
+		DMCP_OnExec(name, flags, false, dos.psp(), loadseg, block.overlay.relocation, ((iscom ? (uint32_t)readsize : memimagesize) + 15u) / 16u, 0, 0); // DOSBOX-LAB hook: exec event
 #endif
 		return true;			/* Everything done for overlays */
 	}
@@ -952,7 +952,7 @@ bool DOS_Execute(const char* name, PhysPt block_pt, uint16_t flags) {
 		reg_bx=memsize;
 		reg_dx=0;
 #if defined(C_DMCP)
-		DMCP_OnExec(name, flags, iscom, pspseg, loadseg, iscom ? 0 : loadseg, memsize, csip, sssp); // DOSBOX-MCP hook: exec event
+		DMCP_OnExec(name, flags, iscom, pspseg, loadseg, iscom ? 0 : loadseg, memsize, csip, sssp); // DOSBOX-LAB hook: exec event
 #endif
 		return true;
 	}
@@ -983,7 +983,7 @@ bool DOS_Execute(const char* name, PhysPt block_pt, uint16_t flags) {
 		DEBUG_CheckExecuteBreakpoint(RealSeg(csip),RealOff(csip));
 #endif
 #if defined(C_DMCP)
-		DMCP_OnExec(name, flags, iscom, pspseg, loadseg, iscom ? 0 : loadseg, memsize, csip, sssp); // DOSBOX-MCP hook: exec event
+		DMCP_OnExec(name, flags, iscom, pspseg, loadseg, iscom ? 0 : loadseg, memsize, csip, sssp); // DOSBOX-LAB hook: exec event
 #endif
 		return true;
 	}

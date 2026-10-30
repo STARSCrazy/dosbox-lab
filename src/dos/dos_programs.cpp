@@ -158,7 +158,7 @@ extern bool int13_enable_48bitLBA;
 #include "ioapi.h"
 #include "zipcppstdbuf.h"
 #if defined(C_DMCP)
-#include "agent/dmcp.h" // DOSBOX-MCP hook: register DMCPBAT.COM
+#include "agent/dmcp.h" // DOSBOX-LAB hook: register DMCPBAT.COM
 #endif
 
 #if defined(WIN32)
@@ -10470,7 +10470,7 @@ void Add_VFiles(bool usecp) {
 	VFILE_RegisterBuiltinFileBlob(bfb_IPSPATCH_EXE, "/PATCHING/");
 #endif
 #if defined(C_DMCP)
-	DMCP_SetupPrograms(); // DOSBOX-MCP hook: register DMCPBAT.COM
+	DMCP_SetupPrograms(); // DOSBOX-LAB hook: register DMCPBAT.COM
 #endif
 }
 

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .errors import DmcpError
 
-FORMAT = "dosbox-mcp-snapshot/1"
+FORMAT = "dosbox-lab-snapshot/1"
 MAX_BEREICH = 64 << 20
 KONV = 0x100000
 

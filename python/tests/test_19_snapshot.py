@@ -35,7 +35,7 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual((self.dir / "mem_phys_ext.bin").stat().st_size, 16 * 1024 * 1024 - 0x100000)
 
     def test_meta(self):
-        self.assertEqual(self.meta["format"], "dosbox-mcp-snapshot/1")
+        self.assertEqual(self.meta["format"], "dosbox-lab-snapshot/1")
         self.assertEqual(self.meta["label"], "nach start")
         self.assertFalse(self.meta["pausiert_vorher"])
         self.assertEqual(self.meta["bereiche"][0]["start"], "0x01000000")
@@ -96,7 +96,7 @@ class SnapshotUnitTest(unittest.TestCase):
     """Ohne Emulator: Bereichsstuecke (B7) und Nummernvergabe (B13)."""
 
     def test_overlapping_big_segments_split_into_64mb_pieces(self):
-        from dosbox_mcp.snapshot import MAX_BEREICH, _stuecke
+        from dosbox_lab.snapshot import MAX_BEREICH, _stuecke
         mb = 1 << 20
         found = [(0x1000000, 0x1000000 + 48 * mb, "A", "a"), (0x1000000 + 24 * mb, 0x1000000 + 72 * mb, "B", "b")]
         pieces = _stuecke(found)
@@ -111,7 +111,7 @@ class SnapshotUnitTest(unittest.TestCase):
 
     def test_number_is_highest_plus_one(self):
         import tempfile
-        from dosbox_mcp.snapshot import _next_nr
+        from dosbox_lab.snapshot import _next_nr
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp)
             self.assertEqual(_next_nr(out), 1)

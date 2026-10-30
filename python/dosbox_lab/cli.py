@@ -48,7 +48,7 @@ def _int_rules(values):
 
 
 def build_parser():
-    p = argparse.ArgumentParser(prog="dosbox_mcp")
+    p = argparse.ArgumentParser(prog="dosbox_lab")
     # --id vor oder nach dem Befehl erlaubt (SUPPRESS: Unterparser ueberschreibt nicht mit None)
     idopt = argparse.ArgumentParser(add_help=False)
     idopt.add_argument("--id", default=argparse.SUPPRESS,
@@ -72,7 +72,7 @@ def build_parser():
     s.add_argument("--timeout", type=float, default=60.0)
     s.add_argument("--max-ausgabe", type=int, default=16 * 1024 * 1024)
     s = add("szenario")
-    s.add_argument("--datei", required=True, help="Szenario-Datei (dosbox-mcp-szenario/1)")
+    s.add_argument("--datei", required=True, help="Szenario-Datei (dosbox-lab-szenario/1)")
     s.add_argument("--var", action="append", default=[], help="Variable NAME=WERT (mehrfach)")
     s.add_argument("--fenster", action="store_true", help="mit Fenster statt headless")
     s.add_argument("--offen", action="store_true", help="Emulator am Ende laufen lassen")

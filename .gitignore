@@ -145,7 +145,7 @@ contrib/macos/dosbox-x.plist
 .worktrees/
 .superpowers/
 
-# DOSBOX-MCP
+# dosbox-lab
 /.runs/
 /python/**/__pycache__/
 /testprogs/*.lst

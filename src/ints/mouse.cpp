@@ -2923,7 +2923,7 @@ private:
 }
 
 #if defined(C_DMCP)
-// DOSBOX-MCP hook: read-only view of the INT 33h state for the agent input code.
+// DOSBOX-LAB hook: read-only view of the INT 33h state for the agent input code.
 void DMCP_MouseRead(float* x, float* y, int* min_x, int* max_x, int* min_y, int* max_y, uint8_t* buttons,
                     float* ppm_x, float* ppm_y, float* senv_x, float* senv_y) {
     *x = mouse.x; *y = mouse.y;

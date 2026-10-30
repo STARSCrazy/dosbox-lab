@@ -5,8 +5,8 @@ import time
 import unittest
 from pathlib import Path
 
-from dosbox_mcp import DmcpError, Dosbox, Mount
-from dosbox_mcp.instance import DEFAULT_EXE, REPO
+from dosbox_lab import DmcpError, Dosbox, Mount
+from dosbox_lab.instance import DEFAULT_EXE, REPO
 
 TESTPROGS = REPO / "testprogs"
 

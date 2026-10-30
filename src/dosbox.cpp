@@ -476,7 +476,7 @@ static Bitu Normal_Loop(void) {
             dosbox_agent::AGENT_BridgePump();
 #endif
 #if defined(C_DMCP)
-            if (DMCP_LoopHook()) // DOSBOX-MCP hook: paused by the agent
+            if (DMCP_LoopHook()) // DOSBOX-LAB hook: paused by the agent
                 return 0;
 #endif
             if (PIC_RunQueue()) {

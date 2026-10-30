@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from dosbox_mcp.files import covered, read_coverage
+from dosbox_lab.files import covered, read_coverage
 from tests.util import class_box, need_build, run_typed, start_idle, wait_until
 
 
@@ -47,7 +47,7 @@ class CoverageTest(unittest.TestCase):
         self.assertEqual(self.info["bloecke"], len(starts))
 
     def test_json_contexts(self):
-        self.assertEqual(self.meta["format"], "dosbox-mcp-coverage/1")
+        self.assertEqual(self.meta["format"], "dosbox-lab-coverage/1")
         start = self.lin(0x100) & 0xFFFF0000
         block = next(b for b in self.meta["bloecke"] if int(b["linear_start"], 16) == start)
         ctx = next(k for k in block["kontexte"] if k.get("modul") == "FLOW.COM")

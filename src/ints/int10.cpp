@@ -32,7 +32,7 @@
 #include "render.h"
 #include "jfont.h"
 #if defined(C_DMCP)
-#include "agent/dmcp.h" // DOSBOX-MCP hook: run_batch BIOS teletype capture
+#include "agent/dmcp.h" // DOSBOX-LAB hook: run_batch BIOS teletype capture
 #endif
 
 Int10Data int10;
@@ -207,7 +207,7 @@ Bitu INT10_Handler(void) {
 		break;
 	case 0x0E:								/* Teletype OutPut */
 #if defined(C_DMCP)
-		DMCP_OnBiosTty(reg_al); // DOSBOX-MCP hook: run_batch BIOS teletype capture
+		DMCP_OnBiosTty(reg_al); // DOSBOX-LAB hook: run_batch BIOS teletype capture
 #endif
 		if(DOSV_CheckCJKVideoMode()) {
 			uint16_t attr;

@@ -4,8 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest import mock
 
-from dosbox_mcp import DmcpError, Mount, run_batch
-from dosbox_mcp.instance import Instance
+from dosbox_lab import DmcpError, Mount, run_batch
+from dosbox_lab.instance import Instance
 from tests.util import TESTPROGS, batch_workdir, need_build
 
 
@@ -129,7 +129,7 @@ class RunBatchRpcErrorTest(unittest.TestCase):
         stub.rundir = base
         stub.client.call.side_effect = DmcpError("timeout", "emulation thread busy")
         stub.alive.return_value = True
-        with mock.patch("dosbox_mcp.batch.Instance.start", return_value=stub):
+        with mock.patch("dosbox_lab.batch.Instance.start", return_value=stub):
             r = run_batch([Mount("C", str(base / "work"))], "X", timeout_s=1)
         self.assertEqual(r["status"], "timeout")
         self.assertIsNone(r["exit_code"])

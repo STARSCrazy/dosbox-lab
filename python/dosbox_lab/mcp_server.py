@@ -1,4 +1,4 @@
-"""MCP-Server (stdio) fuer DOSBOX-MCP. Start: python -m dosbox_mcp.mcp_server"""
+"""MCP-Server (stdio) fuer dosbox-lab. Start: python -m dosbox_lab.mcp_server"""
 import json
 from typing import Optional
 
@@ -10,7 +10,7 @@ from .cli import newest_instance
 from .errors import DmcpError
 from .instance import Mount
 
-mcp = FastMCP("dosbox")
+mcp = FastMCP("dosbox-lab")
 _boxes: dict = {}
 
 
@@ -532,5 +532,10 @@ def snapshot(label: str, mit_erweiterung: bool = False, bis: Optional[str] = Non
     return _box(instanz).snapshot(label, mit_erweiterung, bis=bis)
 
 
-if __name__ == "__main__":
+def main():
+    """Einstieg fuer den Konsolenbefehl dosbox-lab-mcp (stdio)."""
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()

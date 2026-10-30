@@ -5,8 +5,8 @@ import sys
 import unittest
 from pathlib import Path
 
-from dosbox_mcp import DmcpError
-from dosbox_mcp.png import pixel, read_rgb
+from dosbox_lab import DmcpError
+from dosbox_lab.png import pixel, read_rgb
 from tests.util import class_box, need_build, start_prog, wait_until
 
 PYDIR = Path(__file__).resolve().parents[1]
@@ -106,7 +106,7 @@ class TextTest(unittest.TestCase):
         box = start_prog("TEXTCP.COM")
         self.addCleanup(box.stop)
         wait_until(lambda: (r := self._row10(box)) and r.endswith("⌂") and r)
-        proc = subprocess.run([sys.executable, "-m", "dosbox_mcp", "text", "--id", box.inst.id],
+        proc = subprocess.run([sys.executable, "-m", "dosbox_lab", "text", "--id", box.inst.id],
                               cwd=PYDIR, capture_output=True, timeout=60)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertTrue(proc.stdout.isascii())

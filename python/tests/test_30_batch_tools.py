@@ -4,7 +4,7 @@ import sys
 import unittest
 from pathlib import Path
 
-from dosbox_mcp import mcp_server
+from dosbox_lab import mcp_server
 from tests.util import TESTPROGS, batch_workdir, need_build
 
 PYDIR = Path(__file__).resolve().parents[1]
@@ -14,14 +14,14 @@ PYDIR = Path(__file__).resolve().parents[1]
 class BatchToolsTest(unittest.TestCase):
     def test_cli_batch(self):
         work = batch_workdir(self)
-        proc = subprocess.run([sys.executable, "-m", "dosbox_mcp", "batch", "--dir", str(work), "--cmd", "BATCH",
+        proc = subprocess.run([sys.executable, "-m", "dosbox_lab", "batch", "--dir", str(work), "--cmd", "BATCH",
                                "--timeout", "30"], cwd=PYDIR, capture_output=True, text=True, timeout=90)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         result = json.loads(proc.stdout)
         self.assertEqual((result["status"], result["exit_code"]), ("fertig", 7))
 
     def test_cli_batch_bad_argument(self):
-        proc = subprocess.run([sys.executable, "-m", "dosbox_mcp", "batch", "--dir", str(TESTPROGS), "--cmd", " "],
+        proc = subprocess.run([sys.executable, "-m", "dosbox_lab", "batch", "--dir", str(TESTPROGS), "--cmd", " "],
                               cwd=PYDIR, capture_output=True, text=True, timeout=60)
         self.assertEqual(proc.returncode, 1)
         self.assertEqual(json.loads(proc.stdout)["fehler"], "bad_argument")

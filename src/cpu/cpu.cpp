@@ -1210,7 +1210,7 @@ void CPU_Interrupt(Bitu num,Bitu type,uint32_t oldeip) {
 	lastint=(uint8_t)num;
 	FillFlags();
 #if defined(C_DMCP)
-	if (GCC_UNLIKELY(DMCP_hook_active)) DMCP_OnInterrupt((unsigned)num, (unsigned)type, oldeip); // DOSBOX-MCP hook: int log, control flow
+	if (GCC_UNLIKELY(DMCP_hook_active)) DMCP_OnInterrupt((unsigned)num, (unsigned)type, oldeip); // DOSBOX-LAB hook: int log, control flow
 #endif
 #if C_DEBUG
 # if C_HEAVY_DEBUG

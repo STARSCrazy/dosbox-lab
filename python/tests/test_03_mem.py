@@ -3,7 +3,7 @@ import time
 import unittest
 from pathlib import Path
 
-from dosbox_mcp import DmcpError
+from dosbox_lab import DmcpError
 from tests.util import class_box, need_build, start_prog, wait_until
 
 MARK = b"DMCP-MEMTEST-MARK"

@@ -181,7 +181,7 @@ Bits CPU_Core_Normal_Run(void) {
 		BaseSS=SegBase(ss);
 		core.base_val_ds=ds;
 #if defined(C_DMCP)
-		if (GCC_UNLIKELY(DMCP_hook_active) && DMCP_InstructionHook()) { // DOSBOX-MCP hook: agent breakpoint / recording
+		if (GCC_UNLIKELY(DMCP_hook_active) && DMCP_InstructionHook()) { // DOSBOX-LAB hook: agent breakpoint / recording
 			FillFlags();
 			return CBRET_NONE;
 		}

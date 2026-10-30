@@ -527,7 +527,7 @@ void RENDER_EndUpdate( bool abort ) {
     }
 #if defined(C_DMCP)
     if (!abort && !render.disablerender)
-        DMCP_FrameDone(); // DOSBOX-MCP hook: keep a copy of the finished frame
+        DMCP_FrameDone(); // DOSBOX-LAB hook: keep a copy of the finished frame
 #endif
     render.frameskip.index = (render.frameskip.index + 1) & (RENDER_SKIP_CACHE - 1);
     render.updating=false;

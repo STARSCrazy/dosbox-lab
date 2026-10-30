@@ -9,10 +9,10 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from dosbox_mcp import Dosbox, DmcpError
-from dosbox_mcp.files import read_jsonl
-from dosbox_mcp.instance import REPO
-from dosbox_mcp.scenario import _Spieler, load_scenario, play_scenario
+from dosbox_lab import Dosbox, DmcpError
+from dosbox_lab.files import read_jsonl
+from dosbox_lab.instance import REPO
+from dosbox_lab.scenario import _Spieler, load_scenario, play_scenario
 from tests.util import TESTPROGS, class_box, need_build, start_idle, wait_until
 
 
@@ -51,7 +51,7 @@ class OutdirTest(unittest.TestCase):
             finally:
                 box.stop()
 
-GUT = {"format": "dosbox-mcp-szenario/1", "name": "probe", "variablen": {"PROG": "SZENE"},
+GUT = {"format": "dosbox-lab-szenario/1", "name": "probe", "variablen": {"PROG": "SZENE"},
        "start": {"mounts": [{"laufwerk": "C", "pfad": "."}], "layout": "us"},
        "schritte": [{"warte_text": "C:\\>"}, {"tippe": "${PROG}\n"}, {"warte_text": "BEREIT", "timeout_s": 5},
                     {"taste": "a"}, {"warte_speicher": {"adresse": "l:00000000", "hex": "00", "maske": "FF"}},
@@ -153,7 +153,7 @@ class LadenTest(unittest.TestCase):
 
 
 def szene(*schritte, name="szene"):
-    return {"format": "dosbox-mcp-szenario/1", "name": name,
+    return {"format": "dosbox-lab-szenario/1", "name": name,
             "start": {"mounts": [{"laufwerk": "C", "pfad": str(TESTPROGS)}], "layout": "us",
                       "conf": {"dos": {"keyboardlayout": "us"}}},
             "schritte": [{"warte_text": "C:\\>", "timeout_s": 15}, {"tippe": "SZENE\n"},
@@ -170,7 +170,7 @@ class SpielTest(unittest.TestCase):
         box, r = play_scenario(sz)
         try:
             self.assertEqual(r["status"], "ok", r["fehler"])
-            self.assertEqual(r["format"], "dosbox-mcp-szenario-ergebnis/1")
+            self.assertEqual(r["format"], "dosbox-lab-szenario-ergebnis/1")
             self.assertEqual(r["schritte_fertig"], r["schritte_gesamt"])
             self.assertEqual(len(r["schritte"]), r["schritte_gesamt"])
             self.assertGreater(r["bilder"], 3)
@@ -214,8 +214,8 @@ class TotTest(unittest.TestCase):
     """Emulator stirbt: Ergebnis fehler/instance_dead, ohne Ausnahme (Attrappe, kein Emulator)."""
 
     def test_instance_dead(self):
-        from dosbox_mcp.scenario import _Spieler, load_scenario
-        sz = load_scenario({"format": "dosbox-mcp-szenario/1", "name": "tot", "schritte": [{"warte_s": 0.01},
+        from dosbox_lab.scenario import _Spieler, load_scenario
+        sz = load_scenario({"format": "dosbox-lab-szenario/1", "name": "tot", "schritte": [{"warte_s": 0.01},
                                                                                             {"tippe": "x"}]})
 
         tmpdir = tempfile.mkdtemp()
@@ -408,7 +408,7 @@ class AblaufAttrappeTest(unittest.TestCase):
     """Ablauf ohne Emulator (Attrappe): warte_bilder, Diagnose, unerwartete Ausnahmen, Optionspruefung."""
 
     def spiel(self, box, *schritte):
-        sz = load_scenario({"format": "dosbox-mcp-szenario/1", "name": "att", "schritte": list(schritte)})
+        sz = load_scenario({"format": "dosbox-lab-szenario/1", "name": "att", "schritte": list(schritte)})
         return _Spieler(sz, box).spiele()
 
     def test_warte_bilder_anderer_halt(self):
@@ -449,10 +449,10 @@ class AblaufAttrappeTest(unittest.TestCase):
     def test_unerwartete_ausnahme_stoppt_emulator(self):
         gestoppt = []
         box = type("B", (), {"id": "x", "stop": lambda s: gestoppt.append(True)})()
-        with mock.patch("dosbox_mcp.scenario.Dosbox.start", return_value=box), \
-                mock.patch("dosbox_mcp.scenario._Spieler.spiele", side_effect=RuntimeError("kaputt")):
+        with mock.patch("dosbox_lab.scenario.Dosbox.start", return_value=box), \
+                mock.patch("dosbox_lab.scenario._Spieler.spiele", side_effect=RuntimeError("kaputt")):
             with self.assertRaises(RuntimeError):
-                play_scenario({"format": "dosbox-mcp-szenario/1", "name": "x", "schritte": [{"warte_s": 1}]})
+                play_scenario({"format": "dosbox-lab-szenario/1", "name": "x", "schritte": [{"warte_s": 1}]})
         self.assertEqual(gestoppt, [True])
 
     def test_falscher_optionswert_ist_schrittfehler(self):
@@ -534,7 +534,7 @@ class AblaufAttrappeTest(unittest.TestCase):
 
     def test_aufzeichnung_optionen_vor_dem_start_geprueft(self):
         def laden(optionen):
-            return load_scenario({"format": "dosbox-mcp-szenario/1", "name": "x",
+            return load_scenario({"format": "dosbox-lab-szenario/1", "name": "x",
                                   "schritte": [{"aufzeichnung_start": optionen}]})
         laden({"art": "coverage", "name": "c", "hits": True})
         laden({"art": "calls", "ziele": ["l:0"], "zustaende": 1, "name": "c"})
@@ -547,7 +547,7 @@ class AblaufAttrappeTest(unittest.TestCase):
 @need_build
 class CliSzenarioTest(unittest.TestCase):
     def cli(self, *args):
-        p = subprocess.run([sys.executable, "-m", "dosbox_mcp", "szenario", *args], cwd=str(REPO / "python"),
+        p = subprocess.run([sys.executable, "-m", "dosbox_lab", "szenario", *args], cwd=str(REPO / "python"),
                            capture_output=True, text=True, timeout=120)
         return p.returncode, json.loads(p.stdout)
 

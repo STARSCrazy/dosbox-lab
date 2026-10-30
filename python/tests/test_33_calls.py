@@ -2,8 +2,8 @@ import json
 import unittest
 from pathlib import Path
 
-from dosbox_mcp import DmcpError
-from dosbox_mcp.files import read_jsonl
+from dosbox_lab import DmcpError
+from dosbox_lab.files import read_jsonl
 from tests.util import class_box, need_build, run_typed, start_idle, wait_prompt, wait_until
 
 
@@ -43,7 +43,7 @@ class CallsParamTest(unittest.TestCase):
         self.assertEqual(s["geschrieben"], 0)
         self.assertEqual(Path(s["datei"]).read_text(), "")
         meta = json.loads(Path(s["json_pfad"]).read_text())
-        self.assertEqual(meta["format"], "dosbox-mcp-calls/1")
+        self.assertEqual(meta["format"], "dosbox-lab-calls/1")
         self.assertEqual(meta["datei"], "calls_leer.jsonl")
         self.assertEqual(meta["filter"]["ziele"][0]["linear"], "0x00001000")
         self.assertEqual(meta["filter"]["bereiche"][0]["bis"]["linear"], "0x000020FF")

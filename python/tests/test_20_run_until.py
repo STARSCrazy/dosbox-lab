@@ -1,7 +1,7 @@
 import unittest
 
-from dosbox_mcp import DmcpError
-from dosbox_mcp.api import Dosbox
+from dosbox_lab import DmcpError
+from dosbox_lab.api import Dosbox
 from tests.util import class_box, need_build, prog_psp, start_prog, wait_until
 
 

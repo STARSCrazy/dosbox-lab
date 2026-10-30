@@ -11,8 +11,9 @@ from .api import Dosbox
 from .errors import DmcpError
 from .instance import Mount
 
-FORMAT = "dosbox-mcp-szenario/1"
-ERGEBNIS_FORMAT = "dosbox-mcp-szenario-ergebnis/1"
+FORMAT = "dosbox-lab-szenario/1"
+ERGEBNIS_FORMAT = "dosbox-lab-szenario-ergebnis/1"
+ALTE_FORMATE = ("dosbox-mcp-szenario/1",)  # frueherer Name, wird weiter gelesen
 STANDARD_TIMEOUT_S = 30.0
 KOPF = {"format", "name", "variablen", "start", "schritte"}
 START = {"mounts", "autoexec", "conf", "exe", "layout"}
@@ -239,7 +240,7 @@ def load_scenario(quelle, variablen=None):
     else:
         roh, basis, herkunft = copy.deepcopy(quelle), Path.cwd(), None
     _objekt(roh, "szenario", ("format", "name", "schritte"), KOPF)
-    if roh["format"] != FORMAT:
+    if roh["format"] != FORMAT and roh["format"] not in ALTE_FORMATE:
         _fail("format", f"muss {FORMAT} sein")
     if not _name_ok(roh["name"]):
         _fail("name", "muss ein Name ohne Pfadzeichen sein")

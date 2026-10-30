@@ -1,6 +1,6 @@
 import unittest
 
-from dosbox_mcp.files import read_jsonl
+from dosbox_lab.files import read_jsonl
 from tests.util import class_box, need_build, run_typed, start_idle, wait_prompt
 
 

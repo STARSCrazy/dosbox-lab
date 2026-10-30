@@ -115,7 +115,7 @@ void RegisterMem()
         if (!WriteOutputFile(name + ".bin", data.data(), data.size(), &bin_path, error))
             return false;
         JsonValue meta = JsonValue::Object();
-        Set(&meta, "format", Str("dosbox-mcp-dump/1"));
+        Set(&meta, "format", Str("dosbox-lab-dump/1"));
         Set(&meta, "adresse", AddressJson(address));
         Set(&meta, "laenge", Num(length));
         Set(&meta, "fehlend", RangesJson(missing));

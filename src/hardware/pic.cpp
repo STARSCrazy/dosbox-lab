@@ -28,7 +28,7 @@
 #include "setup.h"
 #include "control.h"
 #if defined(C_DMCP)
-#include "agent/dmcp.h" // DOSBOX-MCP hook: func.start holds hardware IRQs
+#include "agent/dmcp.h" // DOSBOX-LAB hook: func.start holds hardware IRQs
 #endif
 
 #if defined(_MSC_VER)
@@ -543,7 +543,7 @@ static void inline master_startIRQ(Bitu i){
 
 void PIC_runIRQs(void) {
 #if defined(C_DMCP)
-    if (GCC_UNLIKELY(DMCP_irq_hold)) return; // DOSBOX-MCP hook: func.start holds hardware IRQs
+    if (GCC_UNLIKELY(DMCP_irq_hold)) return; // DOSBOX-LAB hook: func.start holds hardware IRQs
 #endif
     if (!GETFLAG(IF)) return;
     if (GCC_UNLIKELY(!PIC_IRQCheck)) return;

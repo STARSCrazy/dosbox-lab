@@ -6,9 +6,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from dosbox_mcp import DmcpError, Mount, run_batch
-from dosbox_mcp import cli
-from dosbox_mcp.instance import RUNS, Instance, _pid_alive
+from dosbox_lab import DmcpError, Mount, run_batch
+from dosbox_lab import cli
+from dosbox_lab.instance import RUNS, Instance, _pid_alive
 from tests.util import TESTPROGS, need_build
 
 
@@ -18,12 +18,12 @@ def fake_instance(test, pid):
     (rundir / "out").mkdir(parents=True)
     test.addCleanup(shutil.rmtree, rundir, True)
     (rundir / "instance.json").write_text(json.dumps({
-        "id": inst_id, "pid": pid, "endpoint": rf"\.\pipe\dosbox-mcp-{inst_id}", "mounts": []}), encoding="utf-8")
+        "id": inst_id, "pid": pid, "endpoint": rf"\.\pipe\dosbox-lab-{inst_id}", "mounts": []}), encoding="utf-8")
     return inst_id
 
 
 class PidIdentityTest(unittest.TestCase):
-    """B2: eine laufende PID zaehlt nur, wenn der Prozess dosbox-x.exe ist."""
+    """B2: eine laufende PID zaehlt nur, wenn der Prozess dosbox-lab.exe ist."""
 
     def test_foreign_running_process_is_not_alive(self):
         self.assertFalse(_pid_alive(os.getpid()))
@@ -36,16 +36,16 @@ class PidIdentityTest(unittest.TestCase):
 
     def test_stop_kills_nothing_foreign(self):
         inst_id = fake_instance(self, os.getpid())
-        inst = Instance(inst_id, RUNS / inst_id, rf"\.\pipe\dosbox-mcp-{inst_id}", os.getpid())
-        with mock.patch("dosbox_mcp.instance.subprocess.run") as run:
+        inst = Instance(inst_id, RUNS / inst_id, rf"\.\pipe\dosbox-lab-{inst_id}", os.getpid())
+        with mock.patch("dosbox_lab.instance.subprocess.run") as run:
             inst.stop()
         run.assert_not_called()
         self.assertTrue(inst.alive() is False)  # und wir leben noch
 
     def test_image_name_check_is_case_insensitive(self):
-        with mock.patch("dosbox_mcp.instance._image_name", return_value=r"C:\X\DOSBox-X.EXE"):
+        with mock.patch("dosbox_lab.instance._image_name", return_value=r"C:\X\DOSBox-Lab.EXE"):
             self.assertTrue(_pid_alive(os.getpid()))
-        with mock.patch("dosbox_mcp.instance._image_name", return_value=None):
+        with mock.patch("dosbox_lab.instance._image_name", return_value=None):
             self.assertFalse(_pid_alive(os.getpid()))
 
 
@@ -55,7 +55,7 @@ class StartFailureTest(unittest.TestCase):
     def test_unexecutable_exe(self):
         tmp = Path(tempfile.mkdtemp(prefix="dmcp-exe-"))
         self.addCleanup(shutil.rmtree, tmp, True)
-        fake = tmp / "dosbox-x.exe"
+        fake = tmp / "dosbox-lab.exe"
         fake.write_text("kein programm")
         inst_id = "failtest-" + os.urandom(3).hex()
         self.addCleanup(shutil.rmtree, RUNS / inst_id, True)

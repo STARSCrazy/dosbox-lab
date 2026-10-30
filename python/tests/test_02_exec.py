@@ -1,7 +1,7 @@
 import time
 import unittest
 
-from dosbox_mcp import DmcpError
+from dosbox_lab import DmcpError
 from tests.util import class_box, need_build, start_prog, wait_until
 
 

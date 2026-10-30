@@ -1405,7 +1405,7 @@ std::string AgentServer::HandleJsonRpcImpl(const std::shared_ptr<Impl>& impl, co
     }
 #if defined(C_DMCP)
     {
-        std::string dmcp_response; // DOSBOX-MCP hook
+        std::string dmcp_response; // DOSBOX-LAB hook
         if (DMCP_HandleRequest(request, &dmcp_response))
             return dmcp_response;
     }

@@ -4917,7 +4917,7 @@ static bool MAPPER_LoadBinds(void) {
 void MAPPER_CheckEvent(SDL_Event * event) {
 #if defined(C_DMCP)
     if (DMCP_InputOwned() && (event->type == SDL_KEYDOWN || event->type == SDL_KEYUP))
-        return; // DOSBOX-MCP hook: agent owns the keyboard
+        return; // DOSBOX-LAB hook: agent owns the keyboard
 #endif
     for (CBindGroup_it it=bindgroups.begin();it!=bindgroups.end();++it) {
         if ((*it)->CheckEvent(event)) return;

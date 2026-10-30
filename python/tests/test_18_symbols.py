@@ -2,7 +2,7 @@ import hashlib
 import json
 import unittest
 
-from dosbox_mcp import DmcpError
+from dosbox_lab import DmcpError
 from tests.util import TESTPROGS, class_box, need_build, run_typed, start_idle, wait_until
 
 FLOW_SYMBOLS = {

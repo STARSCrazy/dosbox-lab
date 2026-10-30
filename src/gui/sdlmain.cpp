@@ -4776,7 +4776,7 @@ void UpdateUserCursorScreenDimensions(void) {
 static void HandleMouseMotion(SDL_MouseMotionEvent * motion) {
 #if defined(C_DMCP)
     if (DMCP_InputOwned())
-        return; // DOSBOX-MCP hook: agent owns the mouse, ignore the real one
+        return; // DOSBOX-LAB hook: agent owns the mouse, ignore the real one
 #endif
     bool inputToScreen = false;
 
@@ -4967,7 +4967,7 @@ void MenuFreeScreen(void) {
 static void HandleMouseWheel(bool normal, int amount) {
 #if defined(C_DMCP)
     if (DMCP_InputOwned())
-        return; // DOSBOX-MCP hook: agent owns the mouse, ignore the real wheel
+        return; // DOSBOX-LAB hook: agent owns the mouse, ignore the real wheel
 #endif
     if (amount != 0) {
         Mouse_WheelMoved(normal ? -amount : amount);
@@ -4978,7 +4978,7 @@ static void HandleMouseWheel(bool normal, int amount) {
 static void HandleMouseButton(SDL_MouseButtonEvent * button, SDL_MouseMotionEvent * motion) {
 #if defined(C_DMCP)
     if (DMCP_InputOwned())
-        return; // DOSBOX-MCP hook: agent owns the mouse, ignore the real one
+        return; // DOSBOX-LAB hook: agent owns the mouse, ignore the real one
 #endif
 #if !defined(WIN32)
     (void)motion;
@@ -6205,7 +6205,7 @@ void GFX_Events() {
 		case SDL_MOUSEWHEEL:
             if (sdl.desktop.type == SCREEN_GAMELINK) break;
 #if defined(C_DMCP)
-            if (DMCP_InputOwned()) break; // DOSBOX-MCP hook: agent owns the mouse (also the wheel_key path)
+            if (DMCP_InputOwned()) break; // DOSBOX-LAB hook: agent owns the mouse (also the wheel_key path)
 #endif
 			if (wheel_key && (wheel_guest || !dos_kernel_disabled)) {
 				if(event.wheel.y > 0) {
@@ -10881,7 +10881,7 @@ bool MOUSE_IsLocked()
 {
 #if defined(C_DMCP)
     if (DMCP_InputOwned())
-        return true; // DOSBOX-MCP hook: agent-injected motion is always "captured" (INT 33h mickeys), real cursor untouched
+        return true; // DOSBOX-LAB hook: agent-injected motion is always "captured" (INT 33h mickeys), real cursor untouched
 #endif
     return sdl.mouse.locked;
 }

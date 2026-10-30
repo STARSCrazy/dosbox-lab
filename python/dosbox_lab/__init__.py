@@ -1,4 +1,4 @@
-"""DOSBOX-MCP: Steuerung und Analyse eines DOSBox-X-Forks fuer KI-Agenten."""
+"""dosbox-lab: Steuerung und Analyse eines DOSBox-X-Forks fuer KI-Agenten."""
 from .errors import DmcpError
 from .instance import Instance, Mount
 from .api import Dosbox

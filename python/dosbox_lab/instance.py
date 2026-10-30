@@ -11,8 +11,9 @@ from .errors import DmcpError
 from .pipe import PipeClient
 
 REPO = Path(__file__).resolve().parents[2]
-DEFAULT_EXE = REPO / "bin" / "x64" / "Release SDL2" / "dosbox-x.exe"
-RUNS = REPO / ".runs"
+_EXE_ENV = os.environ.get("DOSBOX_LAB_EXE") or os.environ.get("DOSBOX_MCP_EXE")  # alter Name als Rueckfall
+DEFAULT_EXE = Path(_EXE_ENV) if _EXE_ENV else REPO / "bin" / "x64" / "Release SDL2" / "dosbox-lab.exe"
+RUNS = Path(os.environ.get("DOSBOX_LAB_RUNS") or REPO / ".runs")
 
 DETACHED_PROCESS = 0x00000008
 CREATE_NEW_PROCESS_GROUP = 0x00000200
@@ -76,7 +77,7 @@ def _image_name(handle):
 
 
 def _pid_alive(pid):
-    """Laeuft der Prozess noch und ist es dosbox-x.exe? (PIDs werden wiederverwendet.)"""
+    """Laeuft der Prozess noch und ist es dosbox-lab.exe? (PIDs werden wiederverwendet.)"""
     kernel32 = ctypes.windll.kernel32
     kernel32.OpenProcess.restype = ctypes.c_void_p
     handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
@@ -92,7 +93,7 @@ def _pid_alive(pid):
             name = _image_name(ctypes.c_void_p(handle))
         except (OSError, ValueError, AttributeError):
             return False
-        return bool(name) and name.lower().endswith("dosbox-x.exe")
+        return bool(name) and name.lower().endswith("dosbox-lab.exe")
     finally:
         kernel32.CloseHandle(ctypes.c_void_p(handle))
 
@@ -134,7 +135,7 @@ class Instance:
         mounts = [Mount(m.drive, str(Path(m.host).resolve()), m.cdrom) for m in mounts]
         inst_id = inst_id or uuid.uuid4().hex[:8]
         rundir = RUNS / inst_id
-        endpoint = rf"\\.\pipe\dosbox-mcp-{inst_id}"
+        endpoint = rf"\\.\pipe\dosbox-lab-{inst_id}"
         out = Path(outdir).resolve() if outdir else rundir / "out"
         try:
             rundir.mkdir(parents=True, exist_ok=True)

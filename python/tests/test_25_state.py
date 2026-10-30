@@ -3,7 +3,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from dosbox_mcp import DmcpError
+from dosbox_lab import DmcpError
 from tests.util import class_box, need_build, prog_psp, start_idle, start_prog, wait_prompt, wait_until
 
 
@@ -33,7 +33,7 @@ class StateTest(unittest.TestCase):
         self.assertTrue(Path(info["pfad"]).exists())
         self.assertGreater(info["groesse"], 0)
         meta = json.loads(Path(info["info_pfad"]).read_text(encoding="utf-8"))
-        self.assertEqual(meta["format"], "dosbox-mcp-state/1")
+        self.assertEqual(meta["format"], "dosbox-lab-state/1")
         self.box.resume()
         wait_until(lambda: (self.wert() - saved) & 0xFFFF >= 3, timeout=15)
         self.box.pause()
@@ -220,7 +220,7 @@ class StateAfterBootTest(unittest.TestCase):
     def test_load_after_boot(self):
         import shutil
         import tempfile
-        from dosbox_mcp import Dosbox, Mount
+        from dosbox_lab import Dosbox, Mount
         from tests.util import US
         donor = start_idle()
         try:

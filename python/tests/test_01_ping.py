@@ -1,6 +1,6 @@
 import unittest
 
-from dosbox_mcp import DmcpError
+from dosbox_lab import DmcpError
 from tests.util import need_build, start_prog
 
 

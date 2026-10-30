@@ -271,7 +271,7 @@ JsonValue MetaJson()
     }
     Set(&filter, "ints", ints);
     JsonValue meta = JsonValue::Object();
-    Set(&meta, "format", Str("dosbox-mcp-calls/1"));
+    Set(&meta, "format", Str("dosbox-lab-calls/1"));
     Set(&meta, "datei", Str(g_cfg.name + ".jsonl"));
     Set(&meta, "filter", filter);
     JsonValue stack_bytes;

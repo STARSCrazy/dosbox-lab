@@ -146,7 +146,7 @@ bool Save(const std::string& name, JsonValue* result, Error* error)
     if (!WriteOutputFile(name + ".bin", bin.data(), bin.size(), &bin_path, error))
         return false;
     JsonValue meta = JsonValue::Object();
-    Set(&meta, "format", Str("dosbox-mcp-coverage/1"));
+    Set(&meta, "format", Str("dosbox-lab-coverage/1"));
     Set(&meta, "bin", Str(name + ".bin"));
     Set(&meta, "blockgroesse", Num(kBlockSize));
     Set(&meta, "bloecke", blocks);

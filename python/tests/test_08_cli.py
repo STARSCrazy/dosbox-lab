@@ -10,7 +10,7 @@ PYDIR = Path(__file__).resolve().parents[1]
 
 
 def cli(*args):
-    proc = subprocess.run([sys.executable, "-m", "dosbox_mcp", *args], cwd=PYDIR,
+    proc = subprocess.run([sys.executable, "-m", "dosbox_lab", *args], cwd=PYDIR,
                           capture_output=True, text=True, timeout=60)
     return proc.returncode, json.loads(proc.stdout) if proc.stdout.strip() else None
 
@@ -111,7 +111,7 @@ class CliTest(unittest.TestCase):
             cli("stop", "--id", inst)
 
     def test_func_cli(self):
-        from dosbox_mcp.files import read_jsonl
+        from dosbox_lab.files import read_jsonl
         code, started = cli("start", "--dir", str(TESTPROGS), "--cmd", "FUNC.COM", "--headless")
         self.assertEqual(code, 0, started)
         inst = started["id"]

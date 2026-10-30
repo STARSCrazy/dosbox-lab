@@ -1,4 +1,4 @@
-; MEMTEST.COM - bekannter Speicherinhalt fuer DOSBOX-MCP-Tests.
+; MEMTEST.COM - bekannter Speicherinhalt fuer dosbox-lab-Tests.
 ; Nach dem Marker "DMCP-MEMTEST-MARK" folgen: zaehler (dword, laeuft hoch),
 ; spiegel (dword, bekommt laufend den Wert von eingabe), eingabe (dword).
 bits 16

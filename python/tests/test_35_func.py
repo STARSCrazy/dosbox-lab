@@ -2,8 +2,8 @@ import json
 import unittest
 from pathlib import Path
 
-from dosbox_mcp import DmcpError, Dosbox
-from dosbox_mcp.files import read_jsonl
+from dosbox_lab import DmcpError, Dosbox
+from dosbox_lab.files import read_jsonl
 from tests.util import class_box, need_build, run_typed, start_idle, wait_until
 
 
@@ -52,7 +52,7 @@ class FuncZustandTest(unittest.TestCase):
             self.assertTrue(sav.exists())
             self.assertEqual(sav.name, f"fcalls_{e['call_id']}.sav")
             info = json.loads(sav.with_suffix(".json").read_text())
-            self.assertEqual(info["format"], "dosbox-mcp-state/1")
+            self.assertEqual(info["format"], "dosbox-lab-state/1")
             a = info["aufruf"]
             self.assertEqual(a["call_id"], e["call_id"])
             self.assertEqual(a["art"], "near")

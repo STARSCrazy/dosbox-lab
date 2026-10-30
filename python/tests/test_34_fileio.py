@@ -2,8 +2,8 @@ import shutil
 import tempfile
 import unittest
 
-from dosbox_mcp import Dosbox, Mount
-from dosbox_mcp.files import read_jsonl
+from dosbox_lab import Dosbox, Mount
+from dosbox_lab.files import read_jsonl
 from tests.util import TESTPROGS, US, class_box, need_build, run_typed, wait_until
 
 
@@ -78,7 +78,7 @@ class FileIoNoPreviewTest(unittest.TestCase):
         self.assertTrue(all("vorschau" not in e for e in datei))
 
     def test_bad_preview(self):
-        from dosbox_mcp import DmcpError
+        from dosbox_lab import DmcpError
         with self.assertRaises(DmcpError):
             self.box.events_start(datei_vorschau=300, name="ev_bad")
 
