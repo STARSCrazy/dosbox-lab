@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dosbox-lab": {
+      "command": "dosbox-lab-mcp",
+      "args": [],
+      "env": {
+        "DOSBOX_LAB_EXE": "<path to dosbox-lab.exe, optional>"
+      }
+    }
+  }
+}

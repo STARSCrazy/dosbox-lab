@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dosbox-lab"
+version = "0.1.0"
+description = "Control and analysis of a DOSBox-X fork for DOS programs: MCP server, Python API and CLI"
+requires-python = ">=3.10"
+license = "GPL-2.0-or-later"
+dependencies = ["mcp>=1.2,<2"]
+
+[project.scripts]
+dosbox-lab = "dosbox_lab.cli:main"
+dosbox-lab-mcp = "dosbox_lab.mcp_server:main"
+
+[tool.setuptools]
+packages = ["dosbox_lab"]
