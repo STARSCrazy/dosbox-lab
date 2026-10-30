@@ -53,6 +53,9 @@
 #include "setup.h"
 #include "menu.h"
 #include "../ints/int10.h"
+#if defined(C_DMCP)
+#include "agent/dmcp.h"
+#endif
 
 #include "SDL_syswm.h"
 #include "sdlmain.h"
@@ -4912,6 +4915,10 @@ static bool MAPPER_LoadBinds(void) {
 }
 
 void MAPPER_CheckEvent(SDL_Event * event) {
+#if defined(C_DMCP)
+    if (DMCP_InputOwned() && (event->type == SDL_KEYDOWN || event->type == SDL_KEYUP))
+        return; // DOSBOX-MCP hook: agent owns the keyboard
+#endif
     for (CBindGroup_it it=bindgroups.begin();it!=bindgroups.end();++it) {
         if ((*it)->CheckEvent(event)) return;
     }

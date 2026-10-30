@@ -55,6 +55,9 @@
 #if defined(C_DEBUG) && defined(C_DOSBOX_AGENT)
 #include "agent/agent_bridge.h"
 #endif // defined(C_DEBUG) && defined(C_DOSBOX_AGENT)
+#if defined(C_DMCP)
+#include "agent/dmcp.h"
+#endif
 #include "debug.h"
 #include "cpu.h"
 #include "logging.h"
@@ -471,6 +474,10 @@ static Bitu Normal_Loop(void) {
         while (1) {
 #if defined(C_DEBUG) && defined(C_DOSBOX_AGENT)
             dosbox_agent::AGENT_BridgePump();
+#endif
+#if defined(C_DMCP)
+            if (DMCP_LoopHook()) // DOSBOX-MCP hook: paused by the agent
+                return 0;
 #endif
             if (PIC_RunQueue()) {
                 /* now is the time to check for the NMI (Non-maskable interrupt) */

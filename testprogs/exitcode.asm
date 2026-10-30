@@ -1,0 +1,18 @@
+; EXITCODE.COM - eine Zeile auf stdout (INT 21h 09h), eine auf stderr (INT 21h 40h, Handle 2),
+; Ende mit Errorlevel 2Ah (INT 21h 4Ch).
+bits 16
+org 0x100
+start:
+    mov dx, text_out
+    mov ah, 0x09
+    int 0x21
+    mov ah, 0x40
+    mov bx, 2
+    mov cx, text_err_ende - text_err
+    mov dx, text_err
+    int 0x21
+    mov ax, 0x4C2A
+    int 0x21
+text_out db 'EXITCODE stdout', 13, 10, '$'
+text_err db 'EXITCODE stderr', 13, 10
+text_err_ende:

@@ -17,6 +17,9 @@
  */
 
 #include "cpu.h"
+#if defined(C_DMCP)
+#include "agent/dmcp.h"
+#endif
 #include "logging.h"
 #include "lazyflags.h"
 #include "callback.h"
@@ -177,6 +180,12 @@ Bits CPU_Core_Normal_Run(void) {
 		BaseDS=SegBase(ds);
 		BaseSS=SegBase(ss);
 		core.base_val_ds=ds;
+#if defined(C_DMCP)
+		if (GCC_UNLIKELY(DMCP_hook_active) && DMCP_InstructionHook()) { // DOSBOX-MCP hook: agent breakpoint / recording
+			FillFlags();
+			return CBRET_NONE;
+		}
+#endif
 #if C_DEBUG
 #if C_HEAVY_DEBUG
 		if (DEBUG_HeavyIsBreakpoint()) {

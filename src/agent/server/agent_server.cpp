@@ -4,6 +4,7 @@
 #include "agent/agent_bridge.h"
 #include "agent/debugger_adapter.h"
 #include "agent/debugger_output_parser.h"
+#include "agent/dmcp.h"
 #include "agent/trace_store.h"
 #include "../transport/rpc_transport.h"
 
@@ -1402,6 +1403,13 @@ std::string AgentServer::HandleJsonRpcImpl(const std::shared_ptr<Impl>& impl, co
         return Error(JsonValue::Null(), kErrorRequestTooLarge,
                      "Request exceeds max_message_bytes", "REQUEST_TOO_LARGE");
     }
+#if defined(C_DMCP)
+    {
+        std::string dmcp_response; // DOSBOX-MCP hook
+        if (DMCP_HandleRequest(request, &dmcp_response))
+            return dmcp_response;
+    }
+#endif
 
     JsonRpcRequest parsed;
     JsonRpcParseError parse_kind = JsonRpcParseError::ParseError;

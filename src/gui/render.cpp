@@ -41,6 +41,9 @@
 #include "pc98_cg.h"
 #include "pc98_gdc.h"
 #include "pc98_gdc_const.h"
+#if defined(C_DMCP)
+#include "agent/dmcp.h"
+#endif
 
 #include "render_scalers.h"
 #include "render_glsl.h"
@@ -522,6 +525,10 @@ void RENDER_EndUpdate( bool abort ) {
             if (RENDER_GetForceUpdate()) GFX_EndUpdate(nullptr);
         }
     }
+#if defined(C_DMCP)
+    if (!abort && !render.disablerender)
+        DMCP_FrameDone(); // DOSBOX-MCP hook: keep a copy of the finished frame
+#endif
     render.frameskip.index = (render.frameskip.index + 1) & (RENDER_SKIP_CACHE - 1);
     render.updating=false;
 

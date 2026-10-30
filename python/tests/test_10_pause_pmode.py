@@ -1,0 +1,68 @@
+import time
+import unittest
+
+from dosbox_mcp import DmcpError
+from tests.util import need_build, run_typed, start_idle, wait_until
+
+
+@need_build
+class PausePmodeTest(unittest.TestCase):
+    def setUp(self):
+        self.box = start_idle()
+
+    def tearDown(self):
+        self.box.stop()
+
+    def test_pause_until_pmode(self):
+        status = self.box.call("emu.pause", bis="pmode")
+        self.assertFalse(status["paused"])
+        self.assertEqual(status["wartet_auf"], "pmode")
+        run_typed(self.box, "PMODE")
+        status = self.box.wait_paused(15)
+        self.assertEqual(status["stop_reason"], "pmode")
+        self.assertTrue(status["pmode"])
+        self.assertNotIn("wartet_auf", status)
+        self.assertEqual(self.box.translate("0010:00000000")["modus"], "pm")
+        # Der erste PM-Befehl laeuft noch mit dem alten Real-Mode-CS; erst der Far-Jump laedt 0008.
+        self.assertEqual(self.box.step(1)["cs"], "0008")
+
+    def test_already_in_pm_pauses_at_once(self):
+        run_typed(self.box, "PMODE")
+        wait_until(lambda: self.box.status()["pmode"], timeout=15)
+        status = self.box.pause(until="pmode")
+        self.assertTrue(status["paused"])
+        self.assertEqual(status["stop_reason"], "pmode")
+
+    def test_plain_pause_cancels_wait(self):
+        self.box.call("emu.pause", bis="pmode")
+        status = self.box.pause()
+        self.assertTrue(status["paused"])
+        self.assertNotIn("wartet_auf", status)
+        self.box.resume()
+
+    def test_pause_timeout_disarms_condition(self):
+        with self.assertRaises(DmcpError) as ctx:
+            self.box.pause(until="pmode", timeout_s=0.5)  # DOS prompt never reaches PM
+        self.assertEqual(ctx.exception.code, "timeout")
+        status = self.box.status()
+        self.assertNotIn("wartet_auf", status)
+        self.assertFalse(status["paused"])
+
+    def test_bad_condition(self):
+        with self.assertRaises(DmcpError) as ctx:
+            self.box.call("emu.pause", bis="paging")
+        self.assertEqual(ctx.exception.code, "bad_argument")
+
+    def test_status_time_and_ram(self):
+        first = self.box.status()["zeit_ms"]
+        time.sleep(0.3)
+        self.assertGreater(self.box.status()["zeit_ms"], first)
+        self.assertEqual(self.box.status()["ram_bytes"], 16 * 1024 * 1024)
+
+    def test_wheel_key_disabled(self):
+        conf = (self.box.inst.rundir / "dosbox.conf").read_text(encoding="mbcs")
+        self.assertIn("mouse_wheel_key=0", conf)
+
+
+if __name__ == "__main__":
+    unittest.main()

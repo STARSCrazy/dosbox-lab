@@ -41,6 +41,10 @@
 #include "exepackv4.h"
 #endif
 
+#if defined(C_DMCP)
+#include "agent/dmcp.h" // DOSBOX-MCP hook: exec/exit events
+#endif
+
 #if defined(OSFREE)
 extern bool xms_init;
 extern bool a20_off_if_loading_low;
@@ -115,6 +119,9 @@ void DOS_Terminate(uint16_t pspseg,bool tsr,uint8_t exitcode) {
 	
 	DOS_PSP curpsp(pspseg);
 	if (pspseg==curpsp.GetParent()) return;
+#if defined(C_DMCP)
+	DMCP_OnExit(pspseg, tsr, exitcode); // DOSBOX-MCP hook: exit event
+#endif
 	/* the UTF-8 modes of the AMIS providers end with the process */
 	DOS_UTF8_ProcessEnded(pspseg);
 	DOS_UTF8Names_ProcessEnded(pspseg);
@@ -833,6 +840,9 @@ bool DOS_Execute(const char* name, PhysPt block_pt, uint16_t flags) {
 	if(flags == OVERLAY) {
 		reg_ax = 0;             // Testing with MS-DOS (6.22) shows that if INT 21 AX=4B is called with the overlay flag (AL==3), then AX and DX are 0 on return.
 		reg_dx = 0;
+#if defined(C_DMCP)
+		DMCP_OnExec(name, flags, false, dos.psp(), loadseg, block.overlay.relocation, ((iscom ? (uint32_t)readsize : memimagesize) + 15u) / 16u, 0, 0); // DOSBOX-MCP hook: exec event
+#endif
 		return true;			/* Everything done for overlays */
 	}
 	RealPt csip,sssp;
@@ -941,6 +951,9 @@ bool DOS_Execute(const char* name, PhysPt block_pt, uint16_t flags) {
 		reg_ax=RealOff(csip);
 		reg_bx=memsize;
 		reg_dx=0;
+#if defined(C_DMCP)
+		DMCP_OnExec(name, flags, iscom, pspseg, loadseg, iscom ? 0 : loadseg, memsize, csip, sssp); // DOSBOX-MCP hook: exec event
+#endif
 		return true;
 	}
 
@@ -968,6 +981,9 @@ bool DOS_Execute(const char* name, PhysPt block_pt, uint16_t flags) {
 #if C_DEBUG		
 		/* Started from debug.com, then set breakpoint at start */
 		DEBUG_CheckExecuteBreakpoint(RealSeg(csip),RealOff(csip));
+#endif
+#if defined(C_DMCP)
+		DMCP_OnExec(name, flags, iscom, pspseg, loadseg, iscom ? 0 : loadseg, memsize, csip, sssp); // DOSBOX-MCP hook: exec event
 #endif
 		return true;
 	}

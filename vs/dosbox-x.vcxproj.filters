@@ -1770,6 +1770,81 @@
     <ClCompile Include="..\src\agent\transport\local_transport.cpp">
       <Filter>Sources\agent</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_rpc.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_exec.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_cpu.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_addr.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_modules.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_symbols.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_mem.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_input.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_screen.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_record.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_coverage.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_expr.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_flow.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_calls.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_func.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_fileio.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_disasm.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_watch.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_state.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_dos.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_batch.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_le.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_events.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_ints.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\agent\ext\dmcp_mode.cpp">
+      <Filter>Sources\agent</Filter>
+    </ClCompile>
     <ClCompile Include="..\src\agent\trace\trace_store.cpp">
       <Filter>Sources\agent</Filter>
     </ClCompile>
@@ -2787,6 +2862,30 @@
       <Filter>Sources\agent</Filter>
     </ClInclude>
     <ClInclude Include="..\src\agent\transport\rpc_transport.h">
+      <Filter>Sources\agent</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\agent\dmcp.h">
+      <Filter>Sources\agent</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\agent\ext\dmcp_internal.h">
+      <Filter>Sources\agent</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\agent\ext\dmcp_expr.h">
+      <Filter>Sources\agent</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\agent\ext\dmcp_addr.h">
+      <Filter>Sources\agent</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\agent\ext\dmcp_modules.h">
+      <Filter>Sources\agent</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\agent\ext\dmcp_record.h">
+      <Filter>Sources\agent</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\agent\ext\dmcp_disasm.h">
+      <Filter>Sources\agent</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\agent\ext\dmcp_watch.h">
       <Filter>Sources\agent</Filter>
     </ClInclude>
     <ClInclude Include="..\include\agent\trace_store.h">

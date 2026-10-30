@@ -141,3 +141,11 @@ contrib/macos/dosbox-x.plist
 # ignore default dosbox config files (used for manual testing)
 /dosbox-x.conf
 /src/dosbox-x.conf
+
+.worktrees/
+.superpowers/
+
+# DOSBOX-MCP
+/.runs/
+/python/**/__pycache__/
+/testprogs/*.lst
