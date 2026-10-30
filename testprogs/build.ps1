@@ -1,6 +1,6 @@
 # Assembliert alle Testprogramme zu .COM-Dateien (Quelle mit Zeile "; AUSGABE=EXE": .EXE).
 $ErrorActionPreference = 'Stop'
-$nasm = 'D:\Dev-Tools\nasm\nasm.exe'
+$nasm = if ($env:NASM) { $env:NASM } else { 'nasm' }
 Get-ChildItem "$PSScriptRoot\*.asm" | ForEach-Object {
     $ext = if (Select-String -Path $_.FullName -Pattern '^; AUSGABE=EXE' -Quiet) { '.EXE' } else { '.COM' }
     $out = Join-Path $PSScriptRoot ($_.BaseName.ToUpper() + $ext)
