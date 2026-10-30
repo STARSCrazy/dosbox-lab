@@ -1,7 +1,7 @@
 # Testprogramme
 
 Kleine DOS-Programme mit genau bekanntem Verhalten für die End-to-End-Tests in `python/tests/`.
-Bauen: `.\build.ps1` (braucht NASM unter `D:\Dev-Tools\nasm`). Die `.COM`- und `.EXE`-Dateien sind eingecheckt.
+Bauen: `.\build.ps1` (braucht NASM im PATH oder in der Umgebungsvariable `NASM`). Die `.COM`- und `.EXE`-Dateien sind eingecheckt.
 Standard ist eine `.COM`-Datei; eine Quelle mit der Zeile `; AUSGABE=EXE` wird zu `<NAME>.EXE` (das MZ baut die Quelle selbst).
 Die festen Adressen und Inhalte stehen jeweils im Kopfkommentar der `.asm`-Datei.
 
