@@ -60,7 +60,7 @@ class SnapshotTest(unittest.TestCase):
 
 @need_build
 class SnapshotModeTest(unittest.TestCase):
-    """Extender stehen oft im Real Mode: snapshot(bis="pmode") haelt erst im Protected Mode an (Abnahme MAG)."""
+    """Extender stehen oft im Real Mode: snapshot(bis="pmode") haelt erst im Protected Mode an (Abnahme an einem DOS-Extender-Programm)."""
 
     def setUp(self):
         self.box = start_idle()

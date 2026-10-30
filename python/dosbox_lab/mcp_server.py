@@ -139,7 +139,7 @@ def break_int_remove(nummer: Optional[str] = None, ah: Optional[str] = None, al:
 def emu_run_until(adresse: Optional[str] = None, pmode: Optional[bool] = None, paging: Optional[bool] = None,
                   cs: Optional[str] = None, cpl: Optional[int] = None, ausdruck: Optional[str] = None,
                   timeout_s: float = 10.0, instanz: Optional[str] = None) -> dict:
-    """Laeuft, bis alle angegebenen Bedingungen zugleich gelten (mindestens ein Befehl). Beispiel MAG:
+    """Laeuft, bis alle angegebenen Bedingungen zugleich gelten (mindestens ein Befehl). Beispiel:
     cs="0043", cpl=3. ausdruck: Register/Flags/Speicher, z. B. "eax==5 && byte[l:01000004]>3"."""
     return _box(instanz).run_until(adresse=adresse, pmode=pmode, paging=paging, cs=cs, cpl=cpl,
                                    ausdruck=ausdruck, timeout_s=timeout_s)
@@ -243,7 +243,7 @@ def dos_target(instanz: Optional[str] = None) -> dict:
 @mcp.tool()
 def mouse_move_program(x: int, y: int, x_adresse: str, y_adresse: str, breite: int = 2, toleranz: int = 0,
                        instanz: Optional[str] = None) -> dict:
-    """Bewegt die Maus, bis die Positionsvariablen des Programms x/y zeigen (fuer eigene Maus-Handler wie MAG)."""
+    """Bewegt die Maus, bis die Positionsvariablen des Programms x/y zeigen (fuer eigene Maus-Handler)."""
     return _box(instanz).mouse_move_program(x, y, x_adresse, y_adresse, breite=breite, toleranz=toleranz)
 
 
@@ -513,7 +513,7 @@ def modules_set_segments(modul: str, segmente: list[dict], instanz: Optional[str
 
 @mcp.tool()
 def symbols_load(pfad: str, basis_linear: Optional[str] = None, instanz: Optional[str] = None) -> dict:
-    """Laedt eine Symboldatei decomp-symbole/1. Danach gehen Namen als Adressen (auch MODUL!name)."""
+    """Laedt eine Symboldatei (Format decomp-symbole/1). Danach gehen Namen als Adressen (auch MODUL!name)."""
     return _box(instanz).symbols_load(pfad, basis_linear)
 
 

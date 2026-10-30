@@ -310,7 +310,7 @@ class Dosbox:
     def mouse_move_program(self, x, y, x_adresse, y_adresse, breite=2, versuche=12, toleranz=0, warte_s=0.06):
         """Bewegt die Maus, bis die Positionsvariablen des Programms (x_adresse/y_adresse, je `breite` Byte,
         little endian, vorzeichenlos) x/y zeigen. Fuer Programme mit eigenem Maus-Handler, deren Cursor nicht
-        der INT-33h-Position folgt (z. B. MAG). Regelt mit mouse_move_rel nach und lernt den Faktor
+        der INT-33h-Position folgt (z. B. DOS-Extender-Spiele). Regelt mit mouse_move_rel nach und lernt den Faktor
         Programmeinheiten pro Bewegungsschritt aus der beobachteten Wirkung."""
         def read():
             px = int.from_bytes(self.mem_read(x_adresse, breite), "little")
@@ -534,7 +534,7 @@ class Dosbox:
 
     # --- Symbole ---
     def symbols_load(self, path, basis_linear=None):
-        """Symboldatei im Format decomp-symbole/1 (Decomp: docs/schnittstelle-dosbox.md) laden.
+        """Symboldatei (Format decomp-symbole/1) laden.
         basis_linear: Abbildung, falls die Datei keine mitbringt (linear = basis_linear + va)."""
         try:
             data = json.loads(Path(path).read_text(encoding="utf-8"))

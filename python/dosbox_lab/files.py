@@ -1,4 +1,4 @@
-"""Lesehilfen fuer die Aufzeichnungsdateien (auch fuer Decomp nutzbar)."""
+"""Lesehilfen fuer die Aufzeichnungsdateien (auch fuer externe Werkzeuge nutzbar)."""
 import json
 import struct
 from pathlib import Path

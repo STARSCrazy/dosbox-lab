@@ -29,7 +29,7 @@ JsonValue Num(uint64_t value);
 JsonValue NumF(double value);
 JsonValue Bool(bool value);
 JsonValue Hex(uint64_t value, int digits);
-// file_format=true: "0x" prefix (recording files for Decomp); false: plain like all RPC answers.
+// file_format=true: "0x" prefix (recording files for external tools); false: plain like all RPC answers.
 JsonValue HexOut(uint64_t value, int digits, bool file_format);
 // Fixed-point number with 3 decimals (emulated milliseconds).
 JsonValue NumFixed(double value);
