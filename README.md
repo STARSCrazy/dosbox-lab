@@ -1,17 +1,13 @@
 # dosbox-lab
 
-dosbox-lab is a fork of [DOSBox-X](https://github.com/joncampbell123/dosbox-x) for automated analysis of DOS
-programs. It adds a control channel to the emulator, so that AI agents (through MCP) and Python scripts can run a
-program, stop it, inspect it and record what it does.
+dosbox-lab is a fork of [DOSBox-X](https://github.com/joncampbell123/dosbox-x) for automated analysis of DOS programs. It adds a control channel to the emulator, so that AI agents (through MCP) and Python scripts can run a program, stop it, inspect it and record what it does.
 
-The extension talks to a Python package (`dosbox_lab`) that offers an MCP server with about 70 tools, a Python API
-and a command line. (`dmcp` in the C++ sources stands for "DOSBox machine control protocol".)
+The extension talks to a Python package (`dosbox_lab`) that offers an MCP server with about 70 tools, a Python API and a command line. (`dmcp` in the C++ sources stands for "DOSBox machine control protocol".)
 
 ## Capabilities
 
 - Breakpoints (code, conditional, one-shot, INT breakpoints) and memory watchpoints, with an access log
-- Memory and register access in real mode and protected mode, GDT/LDT/IDT, paging, address translation,
-  disassembly with symbols
+- Memory and register access in real mode and protected mode, GDT/LDT/IDT, paging, address translation, disassembly with symbols
 - Code coverage (bitmap per instruction start, optional hit counters per basic block)
 - Control flow recording (indirect jumps and calls, ring buffer of recent transfers)
 - Call log: registers, flags and stack on entry and registers on return for chosen functions
@@ -88,5 +84,4 @@ files, each marked with `// DOSBOX-LAB hook`. Upstream changes are taken over by
 
 ## License
 
-GPL-2.0, like DOSBox-X (see `COPYING`). Our own files carry `SPDX-License-Identifier: GPL-2.0-or-later`, matching
-the DOSBox-X file headers ("version 2 or, at your option, any later version").
+GPL-2.0, like DOSBox-X (see `COPYING`). Our own files carry `SPDX-License-Identifier: GPL-2.0-or-later`, matching the DOSBox-X file headers ("version 2 or, at your option, any later version").
