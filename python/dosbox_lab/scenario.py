@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""D35: Szenario-Skripte laden, pruefen und abspielen."""
+"""Scenario scripts: load, validate and play."""
 import copy
 import inspect
 import json
@@ -11,80 +11,81 @@ from pathlib import Path
 from .api import Dosbox
 from .errors import DmcpError
 from .instance import Mount
+from .legacy import LEGACY_SCENARIO_FORMATS, normalize_scenario
 
-FORMAT = "dosbox-lab-szenario/1"
-ERGEBNIS_FORMAT = "dosbox-lab-szenario-ergebnis/1"
-ALTE_FORMATE = ("dosbox-mcp-szenario/1",)  # frueherer Name, wird weiter gelesen
-STANDARD_TIMEOUT_S = 30.0
-KOPF = {"format", "name", "variablen", "start", "schritte"}
-START = {"mounts", "autoexec", "conf", "exe", "layout"}
-GEMEINSAM = {"timeout_s", "notiz"}
-AUFZEICHNUNGEN = ("calls", "coverage", "events", "flow")
-ARTEN = ("tippe", "taste", "klick", "maus_programm", "warte_text", "warte_speicher", "warte_halt", "weiter",
-         "warte_bilder", "warte_bild", "warte_s", "zustand_laden", "speicherstand", "screenshot",
-         "aufzeichnung_start", "aufzeichnung_stop")
-KNOEPFE = ("links", "rechts", "mitte")
-PFADZEICHEN = set('\\/:*?"<>|')
+FORMAT = "dosbox-lab-scenario/1"
+RESULT_FORMAT = "dosbox-lab-scenario-result/1"
+DEFAULT_TIMEOUT_S = 30.0
+HEAD_KEYS = {"format", "name", "variables", "start", "steps"}
+START_KEYS = {"mounts", "autoexec", "conf", "exe", "layout"}
+COMMON_KEYS = {"timeout_s", "note"}
+RECORDINGS = ("calls", "coverage", "events", "flow")
+KINDS = ("type", "key", "click", "mouse_program", "wait_text", "wait_memory", "wait_halt", "continue",
+         "wait_frames", "wait_frame", "wait_s", "state_load", "state_save", "screenshot",
+         "recording_start", "recording_stop")
+BUTTONS = ("left", "right", "middle")
+PATH_CHARS = set('\\/:*?"<>|')
+POLL_S = 0.05
 _VAR = re.compile(r"\$\$|\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
-def _fail(stelle, grund):
-    raise DmcpError("bad_argument", f"{stelle}: {grund}")
+def _fail(place, reason):
+    raise DmcpError("bad_argument", f"{place}: {reason}")
 
 
-def _ist_zahl(wert):
-    """Endliche Zahl (kein bool, kein NaN/Infinity, kein Ueberlauf)."""
-    if not isinstance(wert, (int, float)) or isinstance(wert, bool):
+def _is_number(value):
+    """Finite number (no bool, no NaN/Infinity, no overflow)."""
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
         return False
     try:
-        return math.isfinite(wert)
+        return math.isfinite(value)
     except OverflowError:
         return False
 
 
-def _ist_ganz(wert):
-    return isinstance(wert, int) and not isinstance(wert, bool)
+def _is_integer(value):
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
-def _einsetzen(wert, variablen, stelle):
-    """${NAME} und $$ in allen Strings (rekursiv) ersetzen."""
-    if isinstance(wert, str):
-        def ersetze(m):
+def _substitute(value, variables, place):
+    """Replace ${NAME} and $$ in all strings (recursively)."""
+    if isinstance(value, str):
+        def replace(m):
             if m.group(0) == "$$":
                 return "$"
             name = m.group(1)
-            if name not in variablen:
-                _fail(stelle, f"Variable {name} hat keinen Wert")
-            return variablen[name]
-        return _VAR.sub(ersetze, wert)
-    if isinstance(wert, list):
-        return [_einsetzen(v, variablen, f"{stelle}[{i}]") for i, v in enumerate(wert)]
-    if isinstance(wert, dict):
-        return {k: _einsetzen(v, variablen, f"{stelle}.{k}") for k, v in wert.items()}
-    return wert
+            if name not in variables:
+                _fail(place, f"variable {name} has no value")
+            return variables[name]
+        return _VAR.sub(replace, value)
+    if isinstance(value, list):
+        return [_substitute(v, variables, f"{place}[{i}]") for i, v in enumerate(value)]
+    if isinstance(value, dict):
+        return {k: _substitute(v, variables, f"{place}.{k}") for k, v in value.items()}
+    return value
 
 
 def _name_ok(text):
-    return isinstance(text, str) and text != "" and not (set(text) & PFADZEICHEN)
+    return isinstance(text, str) and text != "" and not (set(text) & PATH_CHARS)
 
 
-def _objekt(wert, stelle, pflicht, erlaubt=()):
-    if not isinstance(wert, dict):
-        _fail(stelle, "muss ein Objekt sein")
-    for key in pflicht:
-        if key not in wert:
-            _fail(stelle, f"{key} fehlt")
-    for key in wert:
-        if key not in set(pflicht) | set(erlaubt):
-            _fail(stelle, f"unbekannter Schluessel {key}")
-    return wert
+def _object(value, place, required, allowed=()):
+    if not isinstance(value, dict):
+        _fail(place, "must be an object")
+    for key in required:
+        if key not in value:
+            _fail(place, f"{key} is missing")
+    for key in value:
+        if key not in set(required) | set(allowed):
+            _fail(place, f"unknown key {key}")
+    return value
 
 
-def _start_optionen(art):
-    """Erlaubte Optionen von aufzeichnung_start: Parameter von <art>_start, bei coverage/flow dazu name
-    (Dateiname fuer coverage_save/flow_save)."""
-    namen = set(inspect.signature(getattr(Dosbox, f"{art}_start")).parameters) - {"self"}
-    return namen | {"name"}
+def _start_options(kind):
+    """Allowed options of recording_start: the parameters of <kind>_start, plus name for coverage/flow
+    (file name for coverage_save/flow_save)."""
+    names = set(inspect.signature(getattr(Dosbox, f"{kind}_start")).parameters) - {"self"}
+    return names | {"name"}
 
 
 def _hex_ok(text):
@@ -97,305 +98,306 @@ def _hex_ok(text):
     return True
 
 
-def _pruefe_wert(art, wert, stelle, basis):
-    """Prueft den Wert einer Schritt-Art und gibt ihn (ggf. normalisiert) zurueck."""
-    if art in ("tippe", "zustand_laden"):
-        if not isinstance(wert, str) or wert == "":
-            _fail(stelle, f"{art} braucht einen Text")
-        return str((basis / wert).resolve()) if art == "zustand_laden" else wert
-    if art in ("speicherstand", "screenshot"):
-        if not _name_ok(wert):
-            _fail(stelle, f"{art} braucht einen Namen ohne Pfadzeichen")
-        return wert
-    if art == "taste":
-        if isinstance(wert, str) and wert:
-            return {"name": wert, "ms": 60}
-        _objekt(wert, stelle, ("name",), ("ms",))
-        if not isinstance(wert["name"], str) or not _ist_ganz(wert.get("ms", 60)) or wert.get("ms", 60) <= 0:
-            _fail(stelle, "taste braucht name (Text) und ms > 0")
-        return {"name": wert["name"], "ms": wert.get("ms", 60)}
-    if art == "klick":
-        _objekt(wert, stelle, ("x", "y"), ("knopf",))
-        if not _ist_ganz(wert["x"]) or not _ist_ganz(wert["y"]):
-            _fail(stelle, "klick braucht ganze Zahlen x und y")
-        knopf = wert.get("knopf", "links")
-        if knopf not in KNOEPFE:
-            _fail(stelle, "knopf muss " + ", ".join(KNOEPFE) + " sein")
-        return {"x": wert["x"], "y": wert["y"], "knopf": knopf}
-    if art == "maus_programm":
-        _objekt(wert, stelle, ("x", "y", "x_adresse", "y_adresse"), ("breite", "toleranz", "versuche", "warte_s"))
-        if not _ist_ganz(wert["x"]) or not _ist_ganz(wert["y"]):
-            _fail(stelle, "maus_programm braucht ganze Zahlen x und y")
-        for key in ("x_adresse", "y_adresse"):
-            if not isinstance(wert[key], str) or wert[key] == "":
-                _fail(stelle, f"{key} muss ein nichtleerer Text sein")
-        for key, minimum in (("breite", 1), ("versuche", 1), ("toleranz", 0)):
-            if key in wert and (not _ist_ganz(wert[key]) or wert[key] < minimum):
-                _fail(stelle, f"{key} muss eine ganze Zahl >= {minimum} sein")
-        if "warte_s" in wert and (not _ist_zahl(wert["warte_s"]) or wert["warte_s"] <= 0):
-            _fail(stelle, "warte_s muss eine Zahl > 0 sein")
-        return dict(wert)
-    if art == "warte_text":
-        if isinstance(wert, str) and wert:
-            wert = {"text": wert}
-        _objekt(wert, stelle, ("text",), ("zeile", "regex"))
-        if not isinstance(wert["text"], str) or wert["text"] == "":
-            _fail(stelle, "warte_text braucht einen Text")
-        zeile = wert.get("zeile")
-        if zeile is not None and (not _ist_ganz(zeile) or zeile < 0):
-            _fail(stelle, "zeile muss eine ganze Zahl >= 0 sein")
-        regex = wert.get("regex", False)
+def _check_value(kind, value, place, base):
+    """Validate the value of a step kind and return it (normalized where needed)."""
+    if kind in ("type", "state_load"):
+        if not isinstance(value, str) or value == "":
+            _fail(place, f"{kind} needs a text")
+        return str((base / value).resolve()) if kind == "state_load" else value
+    if kind in ("state_save", "screenshot"):
+        if not _name_ok(value):
+            _fail(place, f"{kind} needs a name without path characters")
+        return value
+    if kind == "key":
+        if isinstance(value, str) and value:
+            return {"name": value, "ms": 60}
+        _object(value, place, ("name",), ("ms",))
+        if not isinstance(value["name"], str) or not _is_integer(value.get("ms", 60)) or value.get("ms", 60) <= 0:
+            _fail(place, "key needs name (text) and ms > 0")
+        return {"name": value["name"], "ms": value.get("ms", 60)}
+    if kind == "click":
+        _object(value, place, ("x", "y"), ("button",))
+        if not _is_integer(value["x"]) or not _is_integer(value["y"]):
+            _fail(place, "click needs integers x and y")
+        button = value.get("button", "left")
+        if button not in BUTTONS:
+            _fail(place, "button must be " + ", ".join(BUTTONS))
+        return {"x": value["x"], "y": value["y"], "button": button}
+    if kind == "mouse_program":
+        _object(value, place, ("x", "y", "x_address", "y_address"), ("width", "tolerance", "attempts", "wait_s"))
+        if not _is_integer(value["x"]) or not _is_integer(value["y"]):
+            _fail(place, "mouse_program needs integers x and y")
+        for key in ("x_address", "y_address"):
+            if not isinstance(value[key], str) or value[key] == "":
+                _fail(place, f"{key} must be a non-empty text")
+        for key, minimum in (("width", 1), ("attempts", 1), ("tolerance", 0)):
+            if key in value and (not _is_integer(value[key]) or value[key] < minimum):
+                _fail(place, f"{key} must be an integer >= {minimum}")
+        if "wait_s" in value and (not _is_number(value["wait_s"]) or value["wait_s"] <= 0):
+            _fail(place, "wait_s must be a number > 0")
+        return dict(value)
+    if kind == "wait_text":
+        if isinstance(value, str) and value:
+            value = {"text": value}
+        _object(value, place, ("text",), ("line", "regex"))
+        if not isinstance(value["text"], str) or value["text"] == "":
+            _fail(place, "wait_text needs a text")
+        line = value.get("line")
+        if line is not None and (not _is_integer(line) or line < 0):
+            _fail(place, "line must be an integer >= 0")
+        regex = value.get("regex", False)
         if not isinstance(regex, bool):
-            _fail(stelle, "regex muss true oder false sein")
+            _fail(place, "regex must be true or false")
         if regex:
             try:
-                re.compile(wert["text"])
+                re.compile(value["text"])
             except re.error as exc:
-                _fail(stelle, f"regex ungueltig: {exc}")
-        return {"text": wert["text"], "zeile": zeile, "regex": regex}
-    if art == "warte_speicher":
-        _objekt(wert, stelle, ("adresse", "hex"), ("maske",))
-        if not isinstance(wert["adresse"], str) or not _hex_ok(wert["hex"]):
-            _fail(stelle, "warte_speicher braucht adresse (Text) und hex (gerade Zahl von Hexziffern)")
-        maske = wert.get("maske")
-        if maske is not None and (not _hex_ok(maske) or len(maske) != len(wert["hex"])):
-            _fail(stelle, "maske muss Hex mit derselben Laenge wie hex sein")
-        return {"adresse": wert["adresse"], "hex": wert["hex"], "maske": maske}
-    if art == "warte_halt":
-        _objekt(wert, stelle, ("adresse",), ("danach",))
-        danach = wert.get("danach", "anhalten")
-        if not isinstance(wert["adresse"], str) or danach not in ("anhalten", "weiter"):
-            _fail(stelle, "warte_halt braucht adresse (Text), danach \"anhalten\" oder \"weiter\"")
-        return {"adresse": wert["adresse"], "danach": danach}
-    if art == "weiter":
-        if wert is not True:
-            _fail(stelle, "weiter braucht den Wert true")
+                _fail(place, f"invalid regex: {exc}")
+        return {"text": value["text"], "line": line, "regex": regex}
+    if kind == "wait_memory":
+        _object(value, place, ("address", "hex"), ("mask",))
+        if not isinstance(value["address"], str) or not _hex_ok(value["hex"]):
+            _fail(place, "wait_memory needs address (text) and hex (an even number of hex digits)")
+        mask = value.get("mask")
+        if mask is not None and (not _hex_ok(mask) or len(mask) != len(value["hex"])):
+            _fail(place, "mask must be hex with the same length as hex")
+        return {"address": value["address"], "hex": value["hex"], "mask": mask}
+    if kind == "wait_halt":
+        _object(value, place, ("address",), ("then",))
+        then = value.get("then", "halt")
+        if not isinstance(value["address"], str) or then not in ("halt", "continue"):
+            _fail(place, "wait_halt needs address (text) and then \"halt\" or \"continue\"")
+        return {"address": value["address"], "then": then}
+    if kind == "continue":
+        if value is not True:
+            _fail(place, "continue needs the value true")
         return True
-    if art == "warte_bilder":
-        if not _ist_ganz(wert) or wert < 1:
-            _fail(stelle, "warte_bilder braucht eine ganze Zahl >= 1")
-        return wert
-    if art == "warte_bild":
-        if not _ist_ganz(wert) or wert < 0:
-            _fail(stelle, "warte_bild braucht eine ganze Zahl >= 0")
-        return wert
-    if art == "warte_s":
-        if not _ist_zahl(wert) or wert <= 0:
-            _fail(stelle, "warte_s braucht eine Zahl > 0")
-        return float(wert)
-    if art in ("aufzeichnung_start", "aufzeichnung_stop"):
-        if not isinstance(wert, dict) or wert.get("art") not in AUFZEICHNUNGEN:
-            _fail(stelle, f"{art} braucht art ({', '.join(AUFZEICHNUNGEN)})")
-        if art == "aufzeichnung_stop":
-            _objekt(wert, stelle, ("art",))
+    if kind == "wait_frames":
+        if not _is_integer(value) or value < 1:
+            _fail(place, "wait_frames needs an integer >= 1")
+        return value
+    if kind == "wait_frame":
+        if not _is_integer(value) or value < 0:
+            _fail(place, "wait_frame needs an integer >= 0")
+        return value
+    if kind == "wait_s":
+        if not _is_number(value) or value <= 0:
+            _fail(place, "wait_s needs a number > 0")
+        return float(value)
+    if kind in ("recording_start", "recording_stop"):
+        if not isinstance(value, dict) or value.get("kind") not in RECORDINGS:
+            _fail(place, f"{kind} needs kind ({', '.join(RECORDINGS)})")
+        if kind == "recording_stop":
+            _object(value, place, ("kind",))
         else:
-            _objekt(wert, stelle, ("art",), _start_optionen(wert["art"]))
-        return dict(wert)
-    raise AssertionError(art)
+            _object(value, place, ("kind",), _start_options(value["kind"]))
+        return dict(value)
+    raise AssertionError(kind)
 
 
-def _pruefe_start(start, basis):
-    start = _objekt(start if start is not None else {}, "start", (), START)
+def _check_start(start, base):
+    start = _object(start if start is not None else {}, "start", (), START_KEYS)
     mounts = []
     for i, m in enumerate(start.get("mounts", [])):
-        stelle = f"start.mounts[{i}]"
-        _objekt(m, stelle, ("laufwerk", "pfad"), ("cdrom",))
-        if (not isinstance(m["laufwerk"], str) or len(m["laufwerk"]) != 1 or not m["laufwerk"].isascii()
-                or not m["laufwerk"].isalpha()):
-            _fail(stelle, "laufwerk muss ein Buchstabe sein")
-        if not isinstance(m["pfad"], str):
-            _fail(stelle, "pfad muss ein Text sein")
+        place = f"start.mounts[{i}]"
+        _object(m, place, ("drive", "path"), ("cdrom",))
+        if (not isinstance(m["drive"], str) or len(m["drive"]) != 1 or not m["drive"].isascii()
+                or not m["drive"].isalpha()):
+            _fail(place, "drive must be a single letter")
+        if not isinstance(m["path"], str):
+            _fail(place, "path must be a text")
         if not isinstance(m.get("cdrom", False), bool):
-            _fail(stelle, "cdrom muss true oder false sein")
-        host = (basis / m["pfad"]).resolve()
+            _fail(place, "cdrom must be true or false")
+        host = (base / m["path"]).resolve()
         if not host.is_dir():
-            _fail(stelle, f"pfad {host} ist kein Ordner")
-        mounts.append(Mount(m["laufwerk"].upper(), str(host), m.get("cdrom", False)))
+            _fail(place, f"path {host} is not a directory")
+        mounts.append(Mount(m["drive"].upper(), str(host), m.get("cdrom", False)))
     autoexec = start.get("autoexec", [])
     if not isinstance(autoexec, list) or not all(isinstance(z, str) for z in autoexec):
-        _fail("start.autoexec", "muss eine Liste von Texten sein")
+        _fail("start.autoexec", "must be a list of texts")
     conf = copy.deepcopy(start.get("conf", {}))
     if not isinstance(conf, dict) or not all(isinstance(v, dict) for v in conf.values()):
-        _fail("start.conf", "muss ein Objekt {abschnitt: {schluessel: wert}} sein")
+        _fail("start.conf", "must be an object {section: {key: value}}")
     conf.setdefault("dosbox", {}).setdefault("quit warning", "false")
     exe = start.get("exe")
     if exe is not None:
         if not isinstance(exe, str):
-            _fail("start.exe", "muss ein Text sein")
-        exe = str((basis / exe).resolve())
+            _fail("start.exe", "must be a text")
+        exe = str((base / exe).resolve())
     layout = start.get("layout", "de")
     if not isinstance(layout, str):
-        _fail("start.layout", "muss ein Text sein")
+        _fail("start.layout", "must be a text")
     return {"mounts": mounts, "autoexec": autoexec, "conf": conf, "exe": exe, "layout": layout}
 
 
-def load_scenario(quelle, variablen=None):
-    """Szenario (Pfad oder Objekt) laden, pruefen, Variablen einsetzen. Fehler: DmcpError bad_argument."""
-    if isinstance(quelle, (str, Path)):
-        pfad = Path(quelle).resolve()
+def load_scenario(source, variables=None):
+    """Load a scenario (path or object), validate it and substitute the variables.
+    Errors: DmcpError bad_argument. Scenarios in the legacy German format are translated first."""
+    if isinstance(source, (str, Path)):
+        path = Path(source).resolve()
         try:
-            roh = json.loads(pfad.read_text(encoding="utf-8-sig"))  # -sig: BOM von PowerShell/Notepad
+            raw = json.loads(path.read_text(encoding="utf-8-sig"))  # -sig: BOM from PowerShell/Notepad
         except (OSError, ValueError) as exc:
-            _fail(str(pfad), f"nicht lesbar: {exc}")
-        basis, herkunft = pfad.parent, str(pfad)
+            _fail(str(path), f"not readable: {exc}")
+        base, origin = path.parent, str(path)
     else:
-        roh, basis, herkunft = copy.deepcopy(quelle), Path.cwd(), None
-    _objekt(roh, "szenario", ("format", "name", "schritte"), KOPF)
-    if roh["format"] != FORMAT and roh["format"] not in ALTE_FORMATE:
-        _fail("format", f"muss {FORMAT} sein")
-    if not _name_ok(roh["name"]):
-        _fail("name", "muss ein Name ohne Pfadzeichen sein")
-    werte = roh.get("variablen", {})
-    if not isinstance(werte, dict) or not all(isinstance(v, str) for v in werte.values()):
-        _fail("variablen", "muss ein Objekt {NAME: \"wert\"} mit Texten sein")
-    werte = dict(werte)
-    for k, v in (variablen or {}).items():
+        raw, base, origin = copy.deepcopy(source), Path.cwd(), None
+    if isinstance(raw, dict) and raw.get("format") in LEGACY_SCENARIO_FORMATS:
+        raw = normalize_scenario(raw)
+        raw["format"] = FORMAT
+    _object(raw, "scenario", ("format", "name", "steps"), HEAD_KEYS)
+    if raw["format"] != FORMAT:
+        _fail("format", f"must be {FORMAT}")
+    if not _name_ok(raw["name"]):
+        _fail("name", "must be a name without path characters")
+    values = raw.get("variables", {})
+    if not isinstance(values, dict) or not all(isinstance(v, str) for v in values.values()):
+        _fail("variables", "must be an object {NAME: \"value\"} with text values")
+    values = dict(values)
+    for k, v in (variables or {}).items():
         if not isinstance(v, str):
-            _fail("variablen", f"{k} muss ein Text sein")
-        werte[k] = v
-    start = _pruefe_start(_einsetzen(roh.get("start"), werte, "start"), basis)
-    if not isinstance(roh["schritte"], list):
-        _fail("schritte", "muss eine Liste sein")
-    schritte = []
-    for i, roh_schritt in enumerate(roh["schritte"]):
-        stelle = f"schritte[{i}]"
-        if not isinstance(roh_schritt, dict):
-            _fail(stelle, "muss ein Objekt sein")
-        arten = [k for k in roh_schritt if k not in GEMEINSAM]
-        if len(arten) != 1:
-            _fail(stelle, "braucht genau eine Schritt-Art")
-        art = arten[0]
-        if art not in ARTEN:
-            _fail(stelle, f"unbekannte Schritt-Art {art}")
-        timeout = roh_schritt.get("timeout_s", STANDARD_TIMEOUT_S)
-        if not _ist_zahl(timeout) or timeout <= 0:
-            _fail(stelle, "timeout_s muss eine Zahl > 0 sein")
-        notiz = roh_schritt.get("notiz")
-        if notiz is not None and not isinstance(notiz, str):
-            _fail(stelle, "notiz muss ein Text sein")
-        notiz = _einsetzen(notiz, werte, f"{stelle}.notiz")
-        wert = _pruefe_wert(art, _einsetzen(roh_schritt[art], werte, stelle), f"{stelle}.{art}", basis)
-        schritte.append({"art": art, "wert": wert, "timeout_s": float(timeout), "notiz": notiz})
-    return {"name": roh["name"], "quelle": herkunft, "basis": basis, "variablen": werte, "start": start,
-            "schritte": schritte}
+            _fail("variables", f"{k} must be a text")
+        values[k] = v
+    start = _check_start(_substitute(raw.get("start"), values, "start"), base)
+    if not isinstance(raw["steps"], list):
+        _fail("steps", "must be a list")
+    steps = []
+    for i, raw_step in enumerate(raw["steps"]):
+        place = f"steps[{i}]"
+        if not isinstance(raw_step, dict):
+            _fail(place, "must be an object")
+        kinds = [k for k in raw_step if k not in COMMON_KEYS]
+        if len(kinds) != 1:
+            _fail(place, "needs exactly one step kind")
+        kind = kinds[0]
+        if kind not in KINDS:
+            _fail(place, f"unknown step kind {kind}")
+        timeout = raw_step.get("timeout_s", DEFAULT_TIMEOUT_S)
+        if not _is_number(timeout) or timeout <= 0:
+            _fail(place, "timeout_s must be a number > 0")
+        note = raw_step.get("note")
+        if note is not None and not isinstance(note, str):
+            _fail(place, "note must be a text")
+        note = _substitute(note, values, f"{place}.note")
+        value = _check_value(kind, _substitute(raw_step[kind], values, place), f"{place}.{kind}", base)
+        steps.append({"kind": kind, "value": value, "timeout_s": float(timeout), "note": note})
+    return {"name": raw["name"], "source": origin, "base": base, "variables": values, "start": start,
+            "steps": steps}
 
 
-ABFRAGE_S = 0.05
+class _StepError(Exception):
+    def __init__(self, reason, message):
+        super().__init__(message)
+        self.reason, self.message = reason, message
 
 
-class _Schrittfehler(Exception):
-    def __init__(self, grund, meldung):
-        super().__init__(meldung)
-        self.grund, self.meldung = grund, meldung
-
-
-class _Spieler:
+class _Player:
     def __init__(self, sz, box):
         self.sz, self.box = sz, box
-        self.r = {"format": ERGEBNIS_FORMAT, "name": sz["name"], "quelle": sz["quelle"],
-                  "variablen": sz["variablen"], "instanz": box.id, "status": "ok", "schritte_fertig": 0,
-                  "schritte_gesamt": len(sz["schritte"]), "dauer_s": 0.0, "bilder": None, "schritte": [],
-                  "speicherstaende": [], "screenshots": [], "aufzeichnungen": [], "fehler": None, "pfad": None}
-        self.laufend = {}  # art -> Eintrag in aufzeichnungen
-        self._save_name = {}  # art -> name aus aufzeichnung_start (coverage/flow: Dateiname beim Speichern)
+        self.r = {"format": RESULT_FORMAT, "name": sz["name"], "source": sz["source"],
+                  "variables": sz["variables"], "instance": box.id, "status": "ok", "steps_done": 0,
+                  "steps_total": len(sz["steps"]), "duration_s": 0.0, "frames": None, "steps": [],
+                  "savestates": [], "screenshots": [], "recordings": [], "error": None, "path": None}
+        self.running = {}  # kind -> entry in recordings
+        self._save_name = {}  # kind -> name from recording_start (coverage/flow: file name when saving)
 
-    # --- Hilfen ---
-    def _status_laeuft(self):
+    # --- Helpers ---
+    def _status_running(self):
         status = self.box.status()
         if status["paused"]:
-            raise _Schrittfehler("angehalten", f"Emulator ist angehalten (stop_reason {status['stop_reason']})")
+            raise _StepError("paused", f"emulator is paused (stop_reason {status['stop_reason']})")
         return status
 
-    def _warte(self, bedingung, timeout_s, was):
-        ende = time.monotonic() + timeout_s
+    def _wait(self, condition, timeout_s, what):
+        end = time.monotonic() + timeout_s
         while True:
-            self._status_laeuft()
-            if bedingung():
+            self._status_running()
+            if condition():
                 return
-            if time.monotonic() > ende:
-                raise _Schrittfehler("timeout", f"{was} nach {timeout_s:g} s nicht erreicht")
-            time.sleep(ABFRAGE_S)
+            if time.monotonic() > end:
+                raise _StepError("timeout", f"{what} not reached after {timeout_s:g} s")
+            time.sleep(POLL_S)
 
-    # --- Schritte ---
-    def _schritt_tippe(self, wert, timeout_s):
-        self._status_laeuft()
-        self.box.type_text(wert, layout=self.sz["start"]["layout"])
+    # --- Steps ---
+    def _step_type(self, value, timeout_s):
+        self._status_running()
+        self.box.type_text(value, layout=self.sz["start"]["layout"])
         self.box.wait_input(timeout_s)
 
-    def _schritt_taste(self, wert, timeout_s):
-        self._status_laeuft()
-        self.box.key(wert["name"], ms=wert["ms"])
+    def _step_key(self, value, timeout_s):
+        self._status_running()
+        self.box.key(value["name"], ms=value["ms"])
         self.box.wait_input(timeout_s)
 
-    def _schritt_klick(self, wert, timeout_s):
-        self._status_laeuft()
-        self.box.mouse_click(wert["x"], wert["y"], button=wert["knopf"])
+    def _step_click(self, value, timeout_s):
+        self._status_running()
+        self.box.mouse_click(value["x"], value["y"], button=value["button"])
 
-    def _schritt_maus_programm(self, wert, timeout_s):
-        self._status_laeuft()
-        self.box.mouse_move_program(**wert)
+    def _step_mouse_program(self, value, timeout_s):
+        self._status_running()
+        self.box.mouse_move_program(**value)
 
-    def _schritt_warte_text(self, wert, timeout_s):
-        def passt():
+    def _step_wait_text(self, value, timeout_s):
+        def matches():
             try:
-                zeilen = self.box.screen_text()["zeilen"]
+                lines = self.box.screen_text()["lines"]
             except DmcpError as exc:
                 if exc.code == "instance_dead":
                     raise
-                return False  # Grafikmodus oder Startphase: noch nicht
-            if wert["zeile"] is not None:
-                zeilen = zeilen[wert["zeile"]:wert["zeile"] + 1]
-            if wert["regex"]:
-                return any(re.search(wert["text"], z) for z in zeilen)
-            return any(wert["text"] in z for z in zeilen)
-        self._warte(passt, timeout_s, f"Text {wert['text']!r}")
+                return False  # graphics mode or start-up phase: not yet
+            if value["line"] is not None:
+                lines = lines[value["line"]:value["line"] + 1]
+            if value["regex"]:
+                return any(re.search(value["text"], z) for z in lines)
+            return any(value["text"] in z for z in lines)
+        self._wait(matches, timeout_s, f"text {value['text']!r}")
 
-    def _schritt_warte_speicher(self, wert, timeout_s):
-        soll = bytes.fromhex(wert["hex"])
-        maske = bytes.fromhex(wert["maske"]) if wert["maske"] else b"\xFF" * len(soll)
+    def _step_wait_memory(self, value, timeout_s):
+        expected = bytes.fromhex(value["hex"])
+        mask = bytes.fromhex(value["mask"]) if value["mask"] else b"\xFF" * len(expected)
 
-        def passt():
-            info = self.box.mem_read_info(wert["adresse"], len(soll))
-            if info.get("fehlend"):
-                return False  # fehlende Seiten lesen als Fuellbytes: noch nicht
-            ist = bytes.fromhex(info["hex"])
-            return all((i & m) == (s & m) for i, s, m in zip(ist, soll, maske))
-        self._warte(passt, timeout_s, f"Speicher {wert['adresse']} = {wert['hex']}")
+        def matches():
+            info = self.box.mem_read_info(value["address"], len(expected))
+            if info.get("missing"):
+                return False  # missing pages read as filler bytes: not yet
+            actual = bytes.fromhex(info["hex"])
+            return all((a & m) == (e & m) for a, e, m in zip(actual, expected, mask))
+        self._wait(matches, timeout_s, f"memory {value['address']} = {value['hex']}")
 
-    def _schritt_warte_bilder(self, wert, timeout_s):
-        self._status_laeuft()
-        ende = time.monotonic() + timeout_s  # gilt fuer den ganzen Schritt, nicht je Teilstueck
-        rest = wert
-        while rest > 0:
-            bleibt = ende - time.monotonic()
-            if bleibt <= 0:
-                self.box.resume()  # steht am Bildende des letzten Teilstuecks: weiterlaufen lassen
-                raise _Schrittfehler("timeout", f"{wert} Bilder nach {timeout_s:g} s nicht erreicht")
-            teil = min(rest, 10000)
-            status = self.box.frame_step(teil, timeout_s=bleibt)
+    def _step_wait_frames(self, value, timeout_s):
+        self._status_running()
+        end = time.monotonic() + timeout_s  # applies to the whole step, not to each piece
+        remaining = value
+        while remaining > 0:
+            time_left = end - time.monotonic()
+            if time_left <= 0:
+                self.box.resume()  # stopped at the frame end of the last piece: let it run on
+                raise _StepError("timeout", f"{value} frames not reached after {timeout_s:g} s")
+            piece = min(remaining, 10000)
+            status = self.box.frame_step(piece, timeout_s=time_left)
             if status["stop_reason"] != "frame":
-                raise _Schrittfehler("angehalten", f"Emulator hielt waehrend warte_bilder an "
-                                                   f"(stop_reason {status['stop_reason']})")
-            rest -= teil
+                raise _StepError("paused", f"emulator halted during wait_frames "
+                                           f"(stop_reason {status['stop_reason']})")
+            remaining -= piece
         self.box.resume()
 
-    def _schritt_warte_bild(self, wert, timeout_s):
-        self._warte(lambda: self.box.status()["bilder"] >= wert, timeout_s, f"Bild {wert}")
+    def _step_wait_frame(self, value, timeout_s):
+        self._wait(lambda: self.box.status()["frames"] >= value, timeout_s, f"frame {value}")
 
-    def _schritt_warte_s(self, wert, timeout_s):
-        self._status_laeuft()
-        time.sleep(wert)
+    def _step_wait_s(self, value, timeout_s):
+        self._status_running()
+        time.sleep(value)
 
-    def _schritt_warte_halt(self, wert, timeout_s):
-        self._status_laeuft()
-        ziel = self.box.translate(wert["adresse"])
-        if "linear" not in ziel:
-            raise _Schrittfehler("bad_argument", f"{wert['adresse']} hat keine lineare Adresse")
-        linear = int(ziel["linear"], 16)
+    def _step_wait_halt(self, value, timeout_s):
+        self._status_running()
+        target = self.box.translate(value["address"])
+        if "linear" not in target:
+            raise _StepError("bad_argument", f"{value['address']} has no linear address")
+        linear = int(target["linear"], 16)
         self.box.break_add(linear)
 
-        def am_ziel():
-            """True bei Halt am Ziel; ein anderer Halt (Waechter, REP-Teilhalt) wird fortgesetzt."""
+        def at_target():
+            """True on a halt at the target; any other halt (watchpoint, REP partial halt) is resumed."""
             status = self.box.status()
             if not status["paused"]:
                 return False
@@ -404,189 +406,189 @@ class _Spieler:
             self.box.resume()
             return False
         try:
-            ende = time.monotonic() + timeout_s
-            while not am_ziel():
-                if time.monotonic() > ende:
-                    if am_ziel():  # Halt genau an der Zeitgrenze zaehlt noch
+            end = time.monotonic() + timeout_s
+            while not at_target():
+                if time.monotonic() > end:
+                    if at_target():  # a halt right at the time limit still counts
                         break
-                    raise _Schrittfehler("timeout",
-                                         f"Haltepunkt {wert['adresse']} nach {timeout_s:g} s nicht erreicht")
-                time.sleep(ABFRAGE_S)
+                    raise _StepError("timeout",
+                                     f"breakpoint {value['address']} not reached after {timeout_s:g} s")
+                time.sleep(POLL_S)
         finally:
             try:
                 self.box.break_remove(linear)
             except DmcpError:
                 pass
-        if wert["danach"] == "weiter":
+        if value["then"] == "continue":
             self.box.resume()
 
-    def _schritt_weiter(self, wert, timeout_s):
+    def _step_continue(self, value, timeout_s):
         self.box.resume()
 
-    def _schritt_zustand_laden(self, wert, timeout_s):
-        self.box.state_load(pfad=wert)
+    def _step_state_load(self, value, timeout_s):
+        self.box.state_load(path=value)
         if self.box.status()["paused"]:
-            self.box.resume()  # state_load laesst den Laufzustand; Spec: danach laeuft der Emulator
+            self.box.resume()  # state_load keeps the run state; spec: the emulator runs afterwards
 
-    def _schritt_speicherstand(self, wert, timeout_s, nr):
-        info = self.box.state_save(wert)
-        self.r["speicherstaende"].append({"nr": nr, "name": wert, "pfad": info["pfad"]})
+    def _step_state_save(self, value, timeout_s, nr):
+        info = self.box.state_save(value)
+        self.r["savestates"].append({"nr": nr, "name": value, "path": info["path"]})
 
-    def _schritt_screenshot(self, wert, timeout_s, nr):
-        info = self.box.screenshot(wert)
-        self.r["screenshots"].append({"nr": nr, "name": wert, "pfad": info["pfad"]})
+    def _step_screenshot(self, value, timeout_s, nr):
+        info = self.box.screenshot(value)
+        self.r["screenshots"].append({"nr": nr, "name": value, "path": info["path"]})
 
-    def _schritt_aufzeichnung_start(self, wert, timeout_s, nr):
-        art = wert["art"]
-        optionen = {k: v for k, v in wert.items() if k != "art"}
-        name = optionen.pop("name", None) if art in ("coverage", "flow") else None
-        if art in self.laufend:
-            # die erste Datei bleibt im Ergebnis - also erst regulaer beenden (bei Fehler bleibt der Eintrag
-            # in laufend und _aufraeumen versucht es noch einmal)
-            alt = self.laufend[art]
-            alt["dateien"] = self._stoppe(art)
-            alt["hinweis"] = "ersetzt"
-            del self.laufend[art]
-        getattr(self.box, f"{art}_start")(**optionen)
-        eintrag = {"art": art, "nr_start": nr, "nr_stop": None, "selbst_gestoppt": False, "dateien": []}
-        self.laufend[art] = eintrag
-        self._save_name[art] = name
-        self.r["aufzeichnungen"].append(eintrag)
+    def _step_recording_start(self, value, timeout_s, nr):
+        kind = value["kind"]
+        options = {k: v for k, v in value.items() if k != "kind"}
+        name = options.pop("name", None) if kind in ("coverage", "flow") else None
+        if kind in self.running:
+            # The first file stays in the result, so end it properly first (on an error the entry stays in
+            # `running` and _cleanup tries once more).
+            old = self.running[kind]
+            old["files"] = self._stop(kind)
+            old["hint"] = "replaced"
+            del self.running[kind]
+        getattr(self.box, f"{kind}_start")(**options)
+        entry = {"kind": kind, "nr_start": nr, "nr_stop": None, "self_stopped": False, "files": []}
+        self.running[kind] = entry
+        self._save_name[kind] = name
+        self.r["recordings"].append(entry)
 
-    def _stoppe(self, art):
-        """Beendet eine Aufzeichnung und gibt ihre Dateien zurueck."""
-        if art == "calls":
+    def _stop(self, kind):
+        """End a recording and return its files."""
+        if kind == "calls":
             info = self.box.calls_stop()
-            return [info["datei"], info["json_pfad"]]
-        if art == "events":
-            return [self.box.events_stop()["datei"]]
-        name = self._save_name.get(art)
-        if art == "coverage":
-            speichern, stoppen, standard = self.box.coverage_save, self.box.coverage_stop, "coverage"
+            return [info["file"], info["json_path"]]
+        if kind == "events":
+            return [self.box.events_stop()["file"]]
+        name = self._save_name.get(kind)
+        if kind == "coverage":
+            save, stop, default = self.box.coverage_save, self.box.coverage_stop, "coverage"
         else:
-            speichern, stoppen, standard = self.box.flow_save, self.box.flow_stop, "indirekt"
-        fehler = None
+            save, stop, default = self.box.flow_save, self.box.flow_stop, "indirect"
+        error = None
         try:
-            info = speichern(name or standard)
-        except Exception as exc:  # trotzdem stoppen (bremst sonst weiter), dann den Fehler melden
-            fehler = exc
+            info = save(name or default)
+        except Exception as exc:  # stop anyway (it slows the emulator down otherwise), then report the error
+            error = exc
         try:
-            stoppen()
+            stop()
         except Exception:
-            if fehler is None:
+            if error is None:
                 raise
-        if fehler is not None:
-            raise fehler
-        return [info[k] for k in ("pfad", "json_pfad", "hits_pfad") if info.get(k)]
+        if error is not None:
+            raise error
+        return [info[k] for k in ("path", "json_path", "hits_path") if info.get(k)]
 
-    def _schritt_aufzeichnung_stop(self, wert, timeout_s, nr):
-        art = wert["art"]
-        if art not in self.laufend:
-            raise _Schrittfehler("bad_argument", f"keine laufende Aufzeichnung {art}")
-        eintrag = self.laufend.pop(art)
-        eintrag["dateien"] = self._stoppe(art)
-        eintrag["nr_stop"] = nr
+    def _step_recording_stop(self, value, timeout_s, nr):
+        kind = value["kind"]
+        if kind not in self.running:
+            raise _StepError("bad_argument", f"no running recording {kind}")
+        entry = self.running.pop(kind)
+        entry["files"] = self._stop(kind)
+        entry["nr_stop"] = nr
 
-    # --- Ablauf ---
-    def _diagnose(self):
-        """Bildschirmtext und Screenshot nach einem Fehler; None, wenn der Emulator nicht mehr lebt."""
+    # --- Flow ---
+    def _diagnosis(self):
+        """Screen text and screenshot after an error; (None, None) if the emulator is no longer alive."""
         name = self.sz["name"]
-        text_pfad = bild_pfad = None
+        text_path = frame_path = None
         try:
             try:
-                zeilen = self.box.screen_text()["zeilen"]
+                lines = self.box.screen_text()["lines"]
             except DmcpError as exc:
                 if exc.code == "instance_dead":
                     raise
-                zeilen = []
-            text_pfad = Path(self.box.inst.outdir) / f"{name}.fehler.txt"
+                lines = []
+            text_path = Path(self.box.inst.outdir) / f"{name}.error.txt"
             try:
-                text_pfad.write_text("\n".join(zeilen) + ("\n" if zeilen else ""), encoding="utf-8")
+                text_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
             except OSError:
-                text_pfad = None
-            bild_pfad = self.box.screenshot(f"{name}.fehler")["pfad"]
+                text_path = None
+            frame_path = self.box.screenshot(f"{name}.error")["path"]
         except DmcpError:
-            if not self._lebt():
+            if not self._alive():
                 return None, None
-        return (str(text_pfad) if text_pfad else None), bild_pfad
+        return (str(text_path) if text_path else None), frame_path
 
-    def _lebt(self):
+    def _alive(self):
         try:
             return bool(self.box.inst.alive())
         except Exception:
             return False
 
-    def spiele(self):
+    def play(self):
         start = time.monotonic()
-        for nr, schritt in enumerate(self.sz["schritte"]):
+        for nr, step in enumerate(self.sz["steps"]):
             t0 = time.monotonic()
-            methode = getattr(self, f"_schritt_{schritt['art']}")
+            method = getattr(self, f"_step_{step['kind']}")
             try:
-                if schritt["art"] in ("speicherstand", "screenshot", "aufzeichnung_start", "aufzeichnung_stop"):
-                    methode(schritt["wert"], schritt["timeout_s"], nr)
+                if step["kind"] in ("state_save", "screenshot", "recording_start", "recording_stop"):
+                    method(step["value"], step["timeout_s"], nr)
                 else:
-                    methode(schritt["wert"], schritt["timeout_s"])
-            except (_Schrittfehler, DmcpError, ValueError, TypeError) as exc:
-                if isinstance(exc, _Schrittfehler):
-                    grund, meldung = exc.grund, exc.meldung
+                    method(step["value"], step["timeout_s"])
+            except (_StepError, DmcpError, ValueError, TypeError) as exc:
+                if isinstance(exc, _StepError):
+                    reason, message = exc.reason, exc.message
                 elif isinstance(exc, DmcpError):
-                    grund, meldung = exc.code, exc.message
-                else:  # falscher Optionswert (api.py: int("viel") u. a.): Schritt-Fehler, keine Ausnahme
-                    grund, meldung = "bad_argument", f"{type(exc).__name__}: {exc}"
-                if grund != "instance_dead" and not self._lebt():
-                    grund = "instance_dead"
-                bildschirm, bild = (None, None) if grund == "instance_dead" else self._diagnose()
-                self.r["status"] = "fehler"
-                self.r["fehler"] = {"nr": nr, "art": schritt["art"], "grund": grund, "meldung": meldung,
-                                    "bildschirm": bildschirm, "screenshot": bild}
+                    reason, message = exc.code, exc.message
+                else:  # wrong option value (api.py: int("many") and the like): a step error, not an exception
+                    reason, message = "bad_argument", f"{type(exc).__name__}: {exc}"
+                if reason != "instance_dead" and not self._alive():
+                    reason = "instance_dead"
+                screen, frame = (None, None) if reason == "instance_dead" else self._diagnosis()
+                self.r["status"] = "error"
+                self.r["error"] = {"nr": nr, "kind": step["kind"], "reason": reason, "message": message,
+                                   "screen": screen, "screenshot": frame}
                 break
-            self.r["schritte"].append({"nr": nr, "art": schritt["art"], "dauer_s": round(time.monotonic() - t0, 3),
-                                       "notiz": schritt["notiz"]})
-            self.r["schritte_fertig"] = nr + 1
-        self._aufraeumen()
-        self.r["dauer_s"] = round(time.monotonic() - start, 3)
+            self.r["steps"].append({"nr": nr, "kind": step["kind"], "duration_s": round(time.monotonic() - t0, 3),
+                                    "note": step["note"]})
+            self.r["steps_done"] = nr + 1
+        self._cleanup()
+        self.r["duration_s"] = round(time.monotonic() - start, 3)
         try:
-            self.r["bilder"] = self.box.status()["bilder"]
+            self.r["frames"] = self.box.status()["frames"]
         except DmcpError:
-            self.r["bilder"] = None
-        self._schreibe()
+            self.r["frames"] = None
+        self._write_result()
         return self.r
 
-    def _aufraeumen(self):
-        """Laufende Aufzeichnungen stoppen (selbst_gestoppt); lebt der Emulator nicht mehr, bleiben dateien leer."""
-        for art, eintrag in list(self.laufend.items()):
-            eintrag["selbst_gestoppt"] = True
+    def _cleanup(self):
+        """Stop running recordings (self_stopped); if the emulator is gone, files stay empty."""
+        for kind, entry in list(self.running.items()):
+            entry["self_stopped"] = True
             try:
-                eintrag["dateien"] = self._stoppe(art)
-            except Exception:  # je Aufzeichnung einzeln: ein Fehler bricht weder das Aufraeumen noch spiele() ab
-                eintrag["dateien"] = []
-        self.laufend.clear()
+                entry["files"] = self._stop(kind)
+            except Exception:  # per recording: one error aborts neither the cleanup nor play()
+                entry["files"] = []
+        self.running.clear()
 
-    def _schreibe(self):
+    def _write_result(self):
         try:
-            pfad = Path(self.box.inst.outdir) / f"{self.sz['name']}.szenario.json"
-            self.r["pfad"] = str(pfad)
-            pfad.write_text(json.dumps(self.r, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            path = Path(self.box.inst.outdir) / f"{self.sz['name']}.scenario.json"
+            self.r["path"] = str(path)
+            path.write_text(json.dumps(self.r, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         except OSError:
-            self.r["pfad"] = None
+            self.r["path"] = None
 
 
-def play_scenario(quelle, variablen=None, headless=True, stop_am_ende=False, ausgabe=None):
-    """Szenario laden und in einer neuen Instanz abspielen. Rueckgabe (box, ergebnis); box None bei
-    stop_am_ende oder wenn der Emulator nicht mehr lebt. Schritt-Fehler stehen im Ergebnis (status "fehler")."""
-    sz = load_scenario(quelle, variablen)
+def play_scenario(source, variables=None, headless=True, stop_at_end=False, output_dir=None):
+    """Load a scenario and play it in a new instance. Returns (box, result); box is None with stop_at_end or
+    if the emulator is no longer alive. Step errors are in the result (status "error")."""
+    sz = load_scenario(source, variables)
     start = sz["start"]
     box = Dosbox.start(mounts=start["mounts"], autoexec=start["autoexec"], headless=headless, exe=start["exe"],
-                       conf=start["conf"], outdir=ausgabe)
+                       conf=start["conf"], outdir=output_dir)
     try:
-        ergebnis = _Spieler(sz, box).spiele()
+        result = _Player(sz, box).play()
     except BaseException:
         try:
-            box.stop()  # unerwarteter Fehler (kein Schritt-Fehler): keine verwaiste Instanz zuruecklassen
+            box.stop()  # unexpected error (not a step error): do not leave an orphaned instance behind
         except Exception:
             pass
         raise
-    if stop_am_ende or not box.inst.alive():
+    if stop_at_end or not box.inst.alive():
         box.stop()
-        return None, ergebnis
-    return box, ergebnis
+        return None, result
+    return box, result
