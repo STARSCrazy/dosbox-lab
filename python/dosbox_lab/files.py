@@ -1,35 +1,35 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Lesehilfen fuer die Aufzeichnungsdateien (auch fuer externe Werkzeuge nutzbar)."""
+"""Readers for the recording files (also usable by external tools)."""
 import json
 import struct
 from pathlib import Path
 
 
 def read_jsonl(path):
-    """Eine JSON-Zeile je Eintrag; leere Zeilen werden uebersprungen."""
+    """One JSON line per entry; empty lines are skipped."""
     return [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 def read_coverage(path):
-    """DMCV-Datei -> {linear_start: bitmap (8192 Byte)}."""
+    """DMCV-File -> {linear_start: bitmap (8192 Byte)}."""
     data = Path(path).read_bytes()
     if data[:4] != b"DMCV":
-        raise ValueError(f"{path}: keine DMCV-Datei")
+        raise ValueError(f"{path}: not a DMCV file")
     version, block_size, count = struct.unpack_from("<III", data, 4)
     if version != 1 or block_size != 65536:
-        raise ValueError(f"{path}: Version {version} / Blockgroesse {block_size} unbekannt")
+        raise ValueError(f"{path}: unknown version {version} / block size {block_size}")
     blocks, pos = {}, 16
     for _ in range(count):
         (start,) = struct.unpack_from("<I", data, pos)
         blocks[start] = data[pos + 4:pos + 4 + 8192]
         pos += 4 + 8192
     if pos != len(data):
-        raise ValueError(f"{path}: Laenge passt nicht zur Blockzahl")
+        raise ValueError(f"{path}: length does not match the block count")
     return blocks
 
 
 def covered(blocks, linear):
-    """True, wenn an `linear` ein Befehl begonnen hat."""
+    """True if an instruction started at `linear`."""
     bitmap = blocks.get(linear & 0xFFFF0000)
     if bitmap is None:
         return False

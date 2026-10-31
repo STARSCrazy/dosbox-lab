@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Emulator-Instanzen starten, wiederfinden und beenden."""
+"""Start, find again and stop emulator instances."""
 import ctypes
 import json
 import os
@@ -12,7 +12,7 @@ from .errors import DmcpError
 from .pipe import PipeClient
 
 REPO = Path(__file__).resolve().parents[2]
-_EXE_ENV = os.environ.get("DOSBOX_LAB_EXE") or os.environ.get("DOSBOX_MCP_EXE")  # alter Name als Rueckfall
+_EXE_ENV = os.environ.get("DOSBOX_LAB_EXE") or os.environ.get("DOSBOX_MCP_EXE")  # old name as fallback
 DEFAULT_EXE = Path(_EXE_ENV) if _EXE_ENV else REPO / "bin" / "x64" / "Release SDL2" / "dosbox-lab.exe"
 RUNS = Path(os.environ.get("DOSBOX_LAB_RUNS") or REPO / ".runs")
 
@@ -23,8 +23,8 @@ SW_SHOWNOACTIVATE = 4
 
 @dataclass
 class Mount:
-    drive: str          # Laufwerksbuchstabe, z. B. "C"
-    host: str           # absoluter Ordner auf dem Host
+    drive: str          # drive letter, e.g. "C"
+    host: str           # absolute folder on the host
     cdrom: bool = False
 
 
@@ -68,7 +68,7 @@ def _agent_text(endpoint, exe, rundir):
 
 
 def _image_name(handle):
-    """Voller Image-Pfad des Prozesses oder None."""
+    """Full image path of the process, or None."""
     kernel32 = ctypes.windll.kernel32
     buf = ctypes.create_unicode_buffer(1024)
     size = ctypes.c_ulong(len(buf))
@@ -78,7 +78,7 @@ def _image_name(handle):
 
 
 def _pid_alive(pid):
-    """Laeuft der Prozess noch und ist es dosbox-lab.exe? (PIDs werden wiederverwendet.)"""
+    """Is the process still running and is it dosbox-lab.exe? (PIDs get reused.)"""
     kernel32 = ctypes.windll.kernel32
     kernel32.OpenProcess.restype = ctypes.c_void_p
     handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
@@ -119,7 +119,7 @@ class Instance:
         return [Mount(**m) for m in info.get("mounts", [])]
 
     def host_path(self, dos_path):
-        """C:\\DIR\\DATEI.EXE -> Host-Pfad ueber die Mounts dieser Instanz; None, wenn kein Mount passt."""
+        """C:\\DIR\\FILE.EXE -> host path via the mounts of this instance; None if no mount matches."""
         if len(dos_path) < 3 or dos_path[1:3] != ":\\":
             return None
         for mount in self.mounts:
@@ -131,8 +131,8 @@ class Instance:
     def start(cls, mounts=(), autoexec=(), headless=False, exe=None, inst_id=None, conf=None, timeout_s=30, outdir=None):
         exe = Path(exe or DEFAULT_EXE)
         if not exe.exists():
-            raise DmcpError("bad_argument", f"Emulator nicht gefunden: {exe} (erst build.ps1 laufen lassen)")
-        # DOSBox loest relative Mount-Pfade gegen den Laufordner auf: gegen das cwd des Aufrufers festlegen
+            raise DmcpError("bad_argument", f"emulator not found: {exe} (run build.ps1 first)")
+        # DOSBox resolves relative mount paths against the run folder: pin them to the caller's cwd
         mounts = [Mount(m.drive, str(Path(m.host).resolve()), m.cdrom) for m in mounts]
         inst_id = inst_id or uuid.uuid4().hex[:8]
         rundir = RUNS / inst_id
@@ -151,13 +151,13 @@ class Instance:
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             startupinfo.wShowWindow = SW_SHOWNOACTIVATE
-            # Kein stdout/stderr umleiten (DOSBox-X-Debugger braucht echte Konsolen-Handles).
+            # Do not redirect stdout/stderr (the DOSBox-X debugger needs real console handles).
             proc = subprocess.Popen(
                 [str(exe), "-conf", str(rundir / "dosbox.conf"), "-agent-config", str(rundir / "agent.env"),
                  "-fastlaunch", "-nomenu"],
                 cwd=str(rundir), env=env, startupinfo=startupinfo,
                 creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, close_fds=True)
-        except OSError as exc:  # z. B. WinError 32, solange die exe neu gebaut wird
+        except OSError as exc:  # e.g. WinError 32 while the exe is being rebuilt
             raise DmcpError("internal", f"emulator could not be started: {exc}") from exc
         inst = cls(inst_id, rundir, endpoint, proc.pid, outdir=out)
         inst._proc = proc
@@ -177,11 +177,11 @@ class Instance:
     def attach(cls, inst_id, timeout_s=10):
         info_path = RUNS / inst_id / "instance.json"
         if not info_path.exists():
-            raise DmcpError("bad_argument", f"Instanz {inst_id} unbekannt")
+            raise DmcpError("bad_argument", f"instance {inst_id} unknown")
         info = json.loads(info_path.read_text(encoding="utf-8"))
         inst = cls(inst_id, RUNS / inst_id, info["endpoint"], info["pid"], outdir=info.get("outdir"))
         if not inst.alive():
-            raise DmcpError("instance_dead", f"Instanz {inst_id} laeuft nicht mehr")
+            raise DmcpError("instance_dead", f"instance {inst_id} is no longer running")
         inst.client.connect(timeout_s, alive=inst.alive)
         return inst
 

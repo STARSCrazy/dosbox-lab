@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""dosbox-lab: Steuerung und Analyse eines DOSBox-X-Forks fuer KI-Agenten."""
+"""dosbox-lab: control and analysis of a DOSBox-X fork for AI agents."""
 from .errors import DmcpError
 from .instance import Instance, Mount
 from .api import Dosbox

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Minimaler PNG-Leser fuer die vom Emulator geschriebenen Bilder (8-Bit RGB, Filter 0)."""
+"""Minimal PNG reader for the frames written by the emulator (8-bit RGB, filter 0)."""
 import struct
 import zlib
 
@@ -8,7 +8,7 @@ def read_rgb(path):
     with open(path, "rb") as f:
         data = f.read()
     if data[:8] != b"\x89PNG\r\n\x1a\n":
-        raise ValueError("keine PNG-Datei")
+        raise ValueError("not a PNG file")
     pos, width, height, idat = 8, 0, 0, b""
     while pos < len(data):
         length, kind = struct.unpack(">I4s", data[pos:pos + 8])
@@ -16,7 +16,7 @@ def read_rgb(path):
         if kind == b"IHDR":
             width, height, depth, color = struct.unpack(">IIBB", body[:10])
             if depth != 8 or color != 2:
-                raise ValueError("nur 8-Bit RGB unterstuetzt")
+                raise ValueError("only 8-bit RGB is supported")
         elif kind == b"IDAT":
             idat += body
         pos += 12 + length
@@ -26,7 +26,7 @@ def read_rgb(path):
     for y in range(height):
         line = raw[y * (stride + 1):(y + 1) * (stride + 1)]
         if line[0] != 0:
-            raise ValueError("nur Filter 0 unterstuetzt")
+            raise ValueError("only filter 0 is supported")
         rows.append(line[1:])
     return width, height, b"".join(rows)
 

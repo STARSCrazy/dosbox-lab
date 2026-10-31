@@ -1,6 +1,6 @@
-"""Bremswirkung messen: DEBUG.COM je 5 s, Zuwachs von wert (16 Bit, Umlaeufe mitgezaehlt).
+"""Measure the slowdown: DEBUG.COM for 5 s each, increase of value (16 bit, wrap-arounds counted).
 
-Aufruf (aus python/): C:/Python314/python.exe tools/t10_speed.py [cycles]   (Standard cycles=max; Abnahme Stufe 3)
+Call (from python/): C:/Python314/python.exe tools/t10_speed.py [cycles]   (default cycles=max; stage 3 acceptance)
 """
 import sys
 import time
@@ -8,25 +8,25 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from tests.util import start_prog, prog_psp  # noqa: E402
 
-DAUER = 5.0
+DURATION = 5.0
 cycles = sys.argv[1] if len(sys.argv) > 1 else "max"
 box = start_prog("DEBUG.COM", conf={"cpu": {"cycles": cycles}})
 psp = prog_psp(box, "DEBUG.COM")
-adr = f"r:{psp:04X}:0180"
+addr = f"r:{psp:04X}:0180"
 
 
-def wert():
-    return int.from_bytes(box.mem_read(adr, 2), "little")
+def value():
+    return int.from_bytes(box.mem_read(addr, 2), "little")
 
 
-def messen():
+def measure():
     total = 0
     maxd = 0
-    last = wert()
+    last = value()
     t0 = time.monotonic()
-    while time.monotonic() - t0 < DAUER:
+    while time.monotonic() - t0 < DURATION:
         time.sleep(0.002)
-        v = wert()
+        v = value()
         d = (v - last) & 0xFFFF
         maxd = max(maxd, d)
         total += d
@@ -35,33 +35,33 @@ def messen():
 
 
 time.sleep(2)
-ergebnis = {}
-for runde in range(2):
-    a = messen()
-    ergebnis.setdefault("a ohne Hook", []).append(a)
+result = {}
+for _round in range(2):
+    a = measure()
+    result.setdefault("a without hook", []).append(a)
 
-    box.break_add(f"r:{psp:04X}:010A", bedingung="eax==0xDEADBEEF")
-    b = messen()
+    box.break_add(f"r:{psp:04X}:010A", condition="eax==0xDEADBEEF")
+    b = measure()
     bl = box.break_list()
     box.break_remove(all=True)
-    ergebnis.setdefault("b Haltepunkt nie wahr", []).append(b)
-    assert not box.status()["paused"], "Haltepunkt hat gehalten"
+    result.setdefault("b breakpoint never true", []).append(b)
+    assert not box.status()["paused"], "breakpoint halted"
 
-    w = box.watch_add("l:200000", laenge=4, art="beides", aktion="protokollieren")
-    c = messen()
+    w = box.watch_add("l:200000", length=4, kind="both", action="log")
+    c = measure()
     wl = box.watch_list()
     box.watch_remove(all=True)
-    ergebnis.setdefault("c Waechter fremde Seite", []).append(c)
+    result.setdefault("c watchpoint on foreign page", []).append(c)
 
-    box.call("emu.run_until", ausdruck="eax==0xDEADBEEF")
-    d = messen()
+    box.call("emu.run_until", expression="eax==0xDEADBEEF")
+    d = measure()
     st = box.call("emu.pause")
     box.resume()
-    ergebnis.setdefault("d run_until ausdruck", []).append(d)
+    result.setdefault("d run_until expression", []).append(d)
 
-print("cycles", cycles, "break_list", bl.get("eintraege"), "watch", wl)
-base = sum(x[0] for x in ergebnis["a ohne Hook"]) / 2
-for k, v in ergebnis.items():
+print("cycles", cycles, "break_list", bl.get("entries"), "watch", wl)
+base = sum(x[0] for x in result["a without hook"]) / 2
+for k, v in result.items():
     rate = sum(x[0] for x in v) / len(v)
-    print(f"{k:28s} {rate/1e3:10.1f} k/s  Faktor {base/rate:5.2f}  ({rate/base*100:5.1f} %)  max_delta {max(x[1] for x in v)}  einzeln {[round(x[0]/1e3,1) for x in v]}")
+    print(f"{k:28s} {rate/1e3:10.1f} k/s  factor {base/rate:5.2f}  ({rate/base*100:5.1f} %)  max_delta {max(x[1] for x in v)}  single {[round(x[0]/1e3,1) for x in v]}")
 box.stop()
