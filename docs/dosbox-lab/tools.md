@@ -1,6 +1,6 @@
 # MCP tools
 
-The MCP server (`dosbox-lab-mcp`) exposes these tools. Almost all take an optional `instanz` argument to pick one
+The MCP server (`dosbox-lab-mcp`) exposes these tools. Almost all take an optional `instance` argument to pick one
 of several running instances. Addresses can be given in several forms: `SSSS:OOOOOOOO` (selector), `r:SSSS:OOOO`
 (real mode), `l:<hex>` (linear), `p:<hex>` (physical), `va:MODULE:<hex>` / `rel:...` (module relative) or a symbol
 name once a symbol file is loaded.
@@ -53,7 +53,7 @@ name once a symbol file is loaded.
 - `func_run` - run a recorded call again from its save state, with changed registers, stack or memory.
 - `modules_list` - known modules with load segment and address mapping.
 - `modules_set_segments` - set the module address mapping (for example LE objects of DOS extenders).
-- `symbols_load` - load a symbol file (format `decomp-symbole/1`); names then work as addresses.
+- `symbols_load` - load a symbol file (format `decomp-symbols/1`); names then work as addresses.
 - `symbol_lookup` - name to address and address to symbol.
 
 ## DOS state
