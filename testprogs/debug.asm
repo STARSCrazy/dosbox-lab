@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; DEBUG.COM - known flow for the debug tests.
 ; Offsets relative to the PSP segment (linear = PSP*16 + offset):
 ;   0100 mov dx,message   0103 mov ah,09   0105 int 21h (print text)

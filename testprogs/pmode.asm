@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; PMODE.COM - switches to 32-bit protected mode with paging and stays there (IF=0).
 ;   GDT: 08 code32 flat, 10 data32 flat, 18 data32 with base 0x01000000
 ;   Paging: 0..4 MB identity; linear 0x01000000..0x013FFFFF -> physical 0x00200000..

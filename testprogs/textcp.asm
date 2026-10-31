@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; TEXTCP.COM - writes the character codes C9 CD 84 01 7F 00 (attribute 07 each) directly into the text
 ; screen (B800:0640 = line 10, column 0) and then waits for a key. For screen.text (CP437 -> Unicode);
 ; mem.write does not reach VGA memory (it writes system memory).

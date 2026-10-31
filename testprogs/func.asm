@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; FUNC.COM - functions for func_run. Offsets relative to the PSP segment (linear = PSP*16 + offset).
 ; Waits until the test sets go (03F1) to 1, then calls each function once and stops in an HLT loop.
 ;   0200 sum:  ax = ax + bx, [result] = ax, local variables on the stack, ret

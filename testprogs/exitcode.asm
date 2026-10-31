@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; EXITCODE.COM - one line on stdout (INT 21h 09h), one on stderr (INT 21h 40h, handle 2),
 ; exits with errorlevel 2Ah (INT 21h 4Ch).
 bits 16

@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; FUNCPM.COM - ring 3 function with INT through a gate to ring 0 (stack switch via the TSS) for func_run.
 ; Waits for go (03F1), switches to 32-bit PM without paging (base 0), jumps by IRETD to ring 3 and calls ring3fn.
 ;   0200 pm32 (ring 0)   0280 ring3 (ring 3, stack 0x00080000)

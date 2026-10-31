@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; ERRPROBE.COM - checks that after returning from EXEC (the emulator reads the LE header) no extended error code (INT 21h 59h) stays behind in the guest; DOS resets it to 0 when the child ends (src/dos/dos_execute.cpp:163).
 ;  1. INT 21h 3Dh opens "NIXDA.XYZ" (missing) -> known error 2; shrink the memory block (4Ah)
 ;  2. EXEC (4B00h) of "LE.EXE" (the emulator reads the LE header); then INT 21h AX=5900h BX=0: AX -> PSP:00F0 (word)

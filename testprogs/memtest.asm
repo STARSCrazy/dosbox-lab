@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; MEMTEST.COM - known memory content for dosbox-lab tests.
 ; The marker "DMCP-MEMTEST-MARK" is followed by: counter (dword, counting up),
 ; mirror (dword, continuously receives the value from input), input (dword).

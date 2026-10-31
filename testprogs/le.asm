@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; OUTPUT=EXE
 ; LE.EXE - test program for the LE base derivation.
 ; MZ program with an appended LE header (dword at 0x3C): 2 objects

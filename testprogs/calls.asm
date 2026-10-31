@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; CALLS.COM - known calls for the call log. Offsets relative to the PSP segment
 ; (linear = PSP*16 + offset). Waits until the test sets go (03F1) to 1.
 ;   0200 inner (inc ax)        0210 outer (2x inner)      0220 recurse (recursion via cx)

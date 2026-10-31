@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; KEYS.COM - for each key: AX from INT 16h/00h to 0000:04F0, counter (word) in 0000:04F2.
 bits 16
 org 0x100

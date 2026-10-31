@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; SCENE.COM - test program for scenarios. Offsets relative to the PSP.
 ; Prints READY, waits for a key (INT 16h), stores the char at 0300, prints "KEY <char>",
 ; calls done_fn and stops in an HLT loop.

@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; OVERLAY.COM - loads EXITCODE.COM as an overlay (INT 21h AX=4B03h) and exits with errorlevel 0.
 ; Parameter block: load segment 3000h (in free memory, not the own block), relocation factor 3000h.
 ; The overlay is not executed. Output "OVERLAY done". Expected module: EXITCODE.COM,

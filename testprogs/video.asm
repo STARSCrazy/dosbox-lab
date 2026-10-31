@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; VIDEO.COM - mode 13h, palette 1=red 2=green 3=blue, three vertical stripes.
 bits 16
 org 0x100

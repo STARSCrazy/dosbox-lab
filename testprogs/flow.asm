@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; FLOW.COM - known indirect jumps/calls for coverage and control-flow tests.
 ; Offsets relative to the PSP segment (linear = PSP*16 + offset):
 ;   0100 start          0107 call [bx] -> 0160      0109 call [bx+2] -> 0168

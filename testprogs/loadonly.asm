@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; LOADONLY.COM - loads EXITCODE.COM without starting it (INT 21h AX=4B01h), then exits with errorlevel 0.
 ; Before that, INT 21h 4Ah shrinks the own block to 1000h paragraphs. The child is never executed
 ; (no output text from EXITCODE); LOADONLY itself prints nothing.

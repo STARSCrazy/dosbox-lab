@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; CALLS32.COM - a 32-bit call in protected mode. Waits for go (03F1), then switches to 32-bit PM
 ; without paging (code selector 08, base 0) and calls add32 with one stack parameter.
 ;   0200 pm32 (32-bit code)   0280 add32: eax = [esp+4] + 1, ret 4

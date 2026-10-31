@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; INT21.COM - test program for events (exec/exit/int/DPMI decoding).
 ;  1. own INT 31h handler (real mode); INT 31h AX=0000 CX=1 (reply AX=00A7, CF=0),
 ;     INT 31h AX=0007 BX=00A7 CX:DX=0012:3456 (reply CF=0)

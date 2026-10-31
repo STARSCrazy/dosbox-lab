@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: GPL-2.0-or-later
 ; MOUSE.COM - mode 13h, INT 33h state written continuously to 0000:04F4..04FD:
 ;   04F4 x, 04F6 y (AX=3), 04F8 buttons (OR since start), 04FA/04FC mickey sums (AX=0Bh)
 bits 16
