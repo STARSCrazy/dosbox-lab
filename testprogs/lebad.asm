@@ -1,4 +1,4 @@
-; AUSGABE=EXE
-; LEBAD.EXE - wie LE.EXE, aber Objektzahl 0 im LE-Kopf (kein auswertbares LE).
-%define LE_OBJEKTE 0
+; OUTPUT=EXE
+; LEBAD.EXE - like LE.EXE, but object count 0 in the LE header (no usable LE).
+%define LE_OBJECTS 0
 %include "le.asm"

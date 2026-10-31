@@ -1,4 +1,4 @@
-; AUSGABE=EXE
-; LEEIP.EXE - wie LE.EXE, aber EIP 0x3000 im LE-Kopf (liegt ausserhalb von Objekt 1, Groesse 0x3000): zuordnung "kein_le".
+; OUTPUT=EXE
+; LEEIP.EXE - like LE.EXE, but EIP 0x3000 in the LE header (outside object 1, size 0x3000): assignment "not_le".
 %define LE_EIP 0x3000
 %include "le.asm"

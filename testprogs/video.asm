@@ -1,4 +1,4 @@
-; VIDEO.COM - Modus 13h, Palette 1=rot 2=gruen 3=blau, drei senkrechte Streifen.
+; VIDEO.COM - mode 13h, palette 1=red 2=green 3=blue, three vertical stripes.
 bits 16
 org 0x100
 start:
@@ -7,7 +7,7 @@ start:
     mov dx, 0x3C8
     mov al, 1
     out dx, al
-    inc dx                  ; 0x3C9: R,G,B je Eintrag, ab Farbe 1
+    inc dx                  ; 0x3C9: R,G,B per entry, from color 1
     mov al, 63
     out dx, al              ; 1: R
     xor al, al
@@ -26,7 +26,7 @@ start:
     mov es, ax
     xor di, di
     mov bx, 200
-.zeile:
+.line:
     mov al, 1
     mov cx, 106
     rep stosb
@@ -37,6 +37,6 @@ start:
     mov cx, 107
     rep stosb
     dec bx
-    jnz .zeile
+    jnz .line
 .halt:
     jmp .halt

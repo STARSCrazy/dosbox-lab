@@ -1,14 +1,14 @@
-; INT21.COM - Testprogramm fuer Ereignisse (exec/exit/int/DPMI-Dekodierung).
-;  1. eigener INT-31h-Handler (Real Mode); INT 31h AX=0000 CX=1 (Antwort AX=00A7, CF=0),
-;     INT 31h AX=0007 BX=00A7 CX:DX=0012:3456 (Antwort CF=0)
-;  2. INT 21h 3Dh oeffnet "INT21.COM", 3Eh schliesst
-;  3. INT 21h 4Ah verkleinert den eigenen Block, 4B00h startet "EXITCODE.COM" mit Befehlszeile " ARG1"
-;  4. INT 21h 4Dh holt den Exit-Code des Kindes (2Ah), Ausgabe "INT21 fertig", Ende mit Kind-Code + 1 (2Bh)
+; INT21.COM - test program for events (exec/exit/int/DPMI decoding).
+;  1. own INT 31h handler (real mode); INT 31h AX=0000 CX=1 (reply AX=00A7, CF=0),
+;     INT 31h AX=0007 BX=00A7 CX:DX=0012:3456 (reply CF=0)
+;  2. INT 21h 3Dh opens "INT21.COM", 3Eh closes it
+;  3. INT 21h 4Ah shrinks the own block, 4B00h starts "EXITCODE.COM" with the command line " ARG1"
+;  4. INT 21h 4Dh gets the exit code of the child (2Ah), output "INT21 done", exit with child code + 1 (2Bh)
 bits 16
 org 0x100
 start:
-    mov sp, stapel_ende
-    mov ax, 0x2531              ; INT 31h -> int31 (DS = CS bei .COM)
+    mov sp, stack_end
+    mov ax, 0x2531              ; INT 31h -> int31 (DS = CS in a .COM)
     mov dx, int31
     int 0x21
     mov ax, 0x0000
@@ -21,70 +21,70 @@ start:
     int 0x31
 
     mov ax, 0x3D00
-    mov dx, eigener_name
+    mov dx, own_name
     int 0x21
-    jc .ohne_datei
+    jc .without_file
     mov bx, ax
     mov ah, 0x3E
     int 0x21
-.ohne_datei:
+.without_file:
 
-    mov bx, (ende - start + 0x100 + 15) / 16
-    mov ah, 0x4A                ; ES = PSP seit Programmstart
+    mov bx, (image_end - start + 0x100 + 15) / 16
+    mov ah, 0x4A                ; ES = PSP since program start
     int 0x21
 
-    mov [parameter + 4], cs     ; Segmente im EXEC-Parameterblock
+    mov [parameter + 4], cs     ; segments in the EXEC parameter block
     mov [parameter + 8], cs
     mov [parameter + 12], cs
-    mov [alter_sp], sp
+    mov [old_sp], sp
     push cs
     pop es
     mov ax, 0x4B00
-    mov dx, kind_name
+    mov dx, child_name
     mov bx, parameter
     int 0x21
     cli
     mov ax, cs
     mov ss, ax
-    mov sp, [cs:alter_sp]
+    mov sp, [cs:old_sp]
     sti
     push cs
     pop ds
 
     mov ah, 0x4D
     int 0x21
-    mov [ergebnis], al
-    mov dx, text_fertig
+    mov [result], al
+    mov dx, text_done
     mov ah, 0x09
     int 0x21
-    mov al, [ergebnis]
+    mov al, [result]
     inc al
     mov ah, 0x4C
     int 0x21
 
-int31:                          ; minimaler "DPMI"-Handler: AX=0000 -> AX=00A7, immer CF=0
+int31:                          ; minimal "DPMI" handler: AX=0000 -> AX=00A7, always CF=0
     cmp ax, 0x0000
-    jne .weiter
+    jne .done
     mov ax, 0x00A7
-.weiter:
+.done:
     push bp
     mov bp, sp
-    and word [bp + 6], 0xFFFE   ; CF im gesicherten FLAGS loeschen
+    and word [bp + 6], 0xFFFE   ; clear CF in the saved FLAGS
     pop bp
     iret
 
-eigener_name db 'INT21.COM', 0
-kind_name    db 'EXITCODE.COM', 0
-befehlszeile db 5, ' ARG1', 13
+own_name     db 'INT21.COM', 0
+child_name   db 'EXITCODE.COM', 0
+command_line db 5, ' ARG1', 13
 fcb          times 16 db 0
-parameter    dw 0               ; Umgebung des Elternprogramms
-             dw befehlszeile, 0
+parameter    dw 0               ; environment of the parent program
+             dw command_line, 0
              dw fcb, 0
              dw fcb, 0
-text_fertig  db 'INT21 fertig', 13, 10, '$'
-ergebnis     db 0
-alter_sp     dw 0
+text_done  db 'INT21 done', 13, 10, '$'
+result     db 0
+old_sp       dw 0
 align 2
-stapel       times 256 db 0
-stapel_ende:
-ende:
+stack        times 256 db 0
+stack_end:
+image_end:

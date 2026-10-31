@@ -1,19 +1,19 @@
-# Testprogramme
+# Test programs
 
-Kleine DOS-Programme mit genau bekanntem Verhalten für die End-to-End-Tests in `python/tests/`.
-Bauen: `.\build.ps1` (braucht NASM im PATH oder in der Umgebungsvariable `NASM`). Die `.COM`- und `.EXE`-Dateien sind eingecheckt.
-Standard ist eine `.COM`-Datei; eine Quelle mit der Zeile `; AUSGABE=EXE` wird zu `<NAME>.EXE` (das MZ baut die Quelle selbst).
-Die festen Adressen und Inhalte stehen jeweils im Kopfkommentar der `.asm`-Datei.
+Small DOS programs with exactly known behavior for the end-to-end tests in `python/tests/`.
+Build: `.\build.ps1` (needs NASM in PATH or in the environment variable `NASM`). The `.COM` and `.EXE` files are checked in.
+The default output is a `.COM` file; a source with the line `; OUTPUT=EXE` becomes `<NAME>.EXE` (the source builds the MZ header itself).
+The fixed addresses and contents are described in the header comment of each `.asm` file.
 
-- `BATCH.COM`: Testprogramm für `run_batch` (Stufe 4): schreibt `ABTTY` + CRLF über INT 21h 02h/06h und INT 10h 0Eh nach stdout, `ERR` + CRLF nach stderr, legt `BATCH.OUT` an und endet mit Errorlevel 7.
-- `LE.EXE` (`le.asm`): Testprogramm für die LE-Basis-Ableitung (D27): von Hand gebautes MZ mit LE-Kopf (2 Objekte: va `0x10000` Größe `0x3000`, va `0x20000` Größe `0x0A10`; Einsprung va `0x10100`). Ein eigener Real-Mode-Handler für INT 31h liefert bei 0501h feste lineare Adressen (ohne Argument `0x300000`/`0x400000`/`0x420000`; `E`: ein Block `0x500000` für alle; `N`: nichts passt). Gibt `LE fertig` aus. Die MZ-Dateigröße wird aus Labeldifferenzen berechnet; das `align 4` vor `code_ende` ist nötig (bin-Sektionen sind auf 4 ausgerichtet), sonst stimmt der MZ-Kopf nicht.
-- `LEBAD.EXE` (`lebad.asm`): wie `LE.EXE`, aber Objektzahl 0 im LE-Kopf (`zuordnung "kein_le"`).
-- `LEEIP.EXE`, `LEVIELE.EXE`, `LEEXEC.EXE` (je eine Wrapper-Datei um `le.asm` mit `%define`, Beschreibung im Kopf von `le.asm`): Varianten für die Grenzfälle der LE-Ableitung (EIP außerhalb des Objekts, 257 Anforderungen, EXEC eines anderen Programms).
-- `OVERLAY.COM`: lädt `EXITCODE.COM` als Overlay (INT 21h 4B03h) nach Segment `3000h`. `LOADONLY.COM`: lädt `EXITCODE.COM` ohne Start (INT 21h 4B01h).
-- `TEXTCP.COM`: schreibt die Zeichencodes C9 CD 84 01 7F 00 direkt in den Textbildschirm (B800:0640 = Zeile 10) und wartet auf eine Taste; Prüfung von `screen.text` (CP437 als Unicode).
-- `ERRPROBE.COM`: erzeugt Fehler 2 (Öffnen einer fehlenden Datei), startet `LE.EXE` und dann `EXITCODE.COM` und legt jeweils INT 21h AX=5900h nach der Rückkehr bei `PSP:00F0` / `PSP:00F2` ab (Marke `PSP:00F4` = 5Ah); Prüfung, dass nach der Rückkehr aus EXEC (LE-Kopf-Lesen) kein Fehlercode zurückbleibt; DOS setzt ihn beim Kindende auf 0 (`src/dos/dos_execute.cpp:163`).
-- `CALLSEXC.COM`: Ausnahme-Kontexte ohne eigenes IRET für das Aufrufprotokoll (D29): verschachtelte INT-0-Fehler, IRET zum äußeren Rahmen, Aufruf von `PSP:0200`, Programmende im INT-0-Handler; Ablauf im Kopf von `callsexc.asm`.
-- `CALLS32.COM`: ein 32-Bit-Aufruf im Protected Mode für das Aufrufprotokoll (D29): wartet auf `PSP:03F1` != 0, schaltet in 32-Bit-PM (Basis 0, ohne Paging), ruft `add32` (`PSP:0280`, `ret 4`) und schreibt danach `C32!` nach linear `0x00500000`.
-- `FUNCPM.COM`: Stackwechsel für `func_run` (D31): wie `CALLS32.COM` in 32-Bit-PM, dann per IRETD nach Ring 3; `ring3fn` (`PSP:02C0`) ruft INT 30h, der Ring-0-Handler läuft auf dem TSS-Stack (ESP0 `0x00070000`) und schreibt `0x11223344` nach linear `0x00500010`; danach `R3OK` nach linear `0x00500000`.
-- `FILEIO.COM`: bekannte Dateizugriffe für das Ereignis `datei` (D34): wartet auf `PSP:03F1` != 0, legt `FIO.DAT` an (64 Byte 00..3F), liest ab Position 10h 16 Byte über `lesen` (`PSP:0280`) nach `PSP:0400` und 8 Byte nach `PSP:0410`, schreibt `FIO` an CON (kein `datei`-Ereignis) und setzt `PSP:03F0` = 1. Im Test mit einem temporären Verzeichnis als Laufwerk C starten.
-- `SZENE.COM`: Testprogramm für Szenarien (D35): gibt `BEREIT` aus, wartet auf eine Taste, legt das Zeichen nach `PSP:0300`, gibt `TASTE <zeichen>` aus, ruft `fertig_fn` (`PSP:0200`, setzt `PSP:0301` = 5Ah, gibt `FERTIG` aus), dann HLT-Schleife.
+- `BATCH.COM`: test program for `run_batch` (stage 4): writes `ABTTY` + CRLF to stdout via INT 21h 02h/06h and INT 10h 0Eh, `ERR` + CRLF to stderr, creates `BATCH.OUT` and ends with errorlevel 7.
+- `LE.EXE` (`le.asm`): test program for the LE base derivation (D27): a hand-built MZ with an LE header (2 objects: va `0x10000` size `0x3000`, va `0x20000` size `0x0A10`; entry va `0x10100`). An own real-mode handler for INT 31h returns fixed linear addresses for 0501h (without argument `0x300000`/`0x400000`/`0x420000`; `E`: one block `0x500000` for all; `N`: nothing fits). Prints `LE done`. The MZ file size is computed from label differences; the `align 4` before `code_end` is required (bin sections are 4-byte aligned), otherwise the MZ header is wrong.
+- `LEBAD.EXE` (`lebad.asm`): like `LE.EXE`, but object count 0 in the LE header (`assignment "not_le"`).
+- `LEEIP.EXE`, `LEVIELE.EXE`, `LEEXEC.EXE` (each a wrapper file around `le.asm` with `%define`, description in the header of `le.asm`): variants for the edge cases of the LE derivation (EIP outside the object, 257 requests, EXEC of another program).
+- `OVERLAY.COM`: loads `EXITCODE.COM` as an overlay (INT 21h 4B03h) at segment `3000h`. `LOADONLY.COM`: loads `EXITCODE.COM` without starting it (INT 21h 4B01h).
+- `TEXTCP.COM`: writes the character codes C9 CD 84 01 7F 00 directly into the text screen (B800:0640 = line 10) and waits for a key; check for `screen.text` (CP437 as Unicode).
+- `ERRPROBE.COM`: raises error 2 (opening a missing file), starts `LE.EXE` and then `EXITCODE.COM` and stores INT 21h AX=5900h after each return at `PSP:00F0` / `PSP:00F2` (marker `PSP:00F4` = 5Ah); checks that no error code stays behind after returning from EXEC (LE header read); DOS resets it to 0 when the child ends (`src/dos/dos_execute.cpp:163`).
+- `CALLSEXC.COM`: exception contexts without their own IRET for the call log (D29): nested INT 0 faults, IRET to the outer frame, call from `PSP:0200`, program end in the INT 0 handler; flow in the header of `callsexc.asm`.
+- `CALLS32.COM`: a 32-bit call in protected mode for the call log (D29): waits for `PSP:03F1` != 0, switches to 32-bit PM (base 0, without paging), calls `add32` (`PSP:0280`, `ret 4`) and then writes `C32!` to linear `0x00500000`.
+- `FUNCPM.COM`: stack switch for `func_run` (D31): like `CALLS32.COM` in 32-bit PM, then IRETD to ring 3; `ring3fn` (`PSP:02C0`) calls INT 30h, the ring 0 handler runs on the TSS stack (ESP0 `0x00070000`) and writes `0x11223344` to linear `0x00500010`; then `R3OK` to linear `0x00500000`.
+- `FILEIO.COM`: known file accesses for the `file` event (D34): waits for `PSP:03F1` != 0, creates `FIO.DAT` (64 bytes 00..3F), reads 16 bytes from position 10h via `read` (`PSP:0280`) into `PSP:0400` and 8 bytes into `PSP:0410`, writes `FIO` to CON (no `file` event) and sets `PSP:03F0` = 1. In the test, start it with a temporary directory as drive C.
+- `SCENE.COM`: test program for scenarios (D35): prints `READY`, waits for a key, stores the char at `PSP:0300`, prints `KEY <char>`, calls `done_fn` (`PSP:0200`, sets `PSP:0301` = 5Ah, prints `DONE`), then an HLT loop.

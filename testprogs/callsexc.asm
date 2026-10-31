@@ -1,61 +1,61 @@
-; CALLSEXC.COM - Ausnahme-Kontexte ohne eigenes IRET fuer das Aufrufprotokoll (D29).
-; Offsets relativ zum PSP-Segment (linear = PSP*16 + Offset). Wartet, bis der Test los (03F1) auf 1 setzt.
-;   1. div 0 -> Handler (Kontext 1); der loest erneut div 0 aus (Kontext 2); der zweite Eintritt setzt SP auf
-;      den ersten Rahmen zurueck und kehrt per IRET zum ersten Fehler zurueck (Kontext 2 endet ohne eigenes IRET).
-;   2. call ziel (0200) im Hauptkontext.
-;   3. div 0 -> Handler stellt den alten INT-0-Vektor wieder her und beendet per INT 21h 4C00h (kein IRET).
-;   0200 ziel (inc ax), 0300 alter Vektor (dd), 0304 merk_sp (dw), 0306 zaehler (db), 03F1 los
+; CALLSEXC.COM - exception contexts without their own IRET for the call log (D29).
+; Offsets relative to the PSP segment (linear = PSP*16 + offset). Waits until the test sets go (03F1) to 1.
+;   1. div 0 -> handler (context 1); it raises div 0 again (context 2); the second entry resets SP to
+;      the first frame and returns by IRET to the first fault (context 2 ends without its own IRET).
+;   2. call target (0200) in the main context.
+;   3. div 0 -> handler restores the old INT 0 vector and exits via INT 21h 4C00h (no IRET).
+;   0200 target (inc ax), 0300 old vector (dd), 0304 saved_sp (dw), 0306 counter (db), 03F1 go
 bits 16
 org 0x100
 start:
     mov ax, 0x3500
-    int 0x21                 ; ES:BX = alter INT-0-Vektor
-    mov [alt_vektor], bx
-    mov [alt_vektor + 2], es
+    int 0x21                 ; ES:BX = old INT 0 vector
+    mov [old_vector], bx
+    mov [old_vector + 2], es
     mov ax, 0x2500
     mov dx, handler
     int 0x21
-.warte:
-    cmp byte [los], 0
-    je .warte
+.wait:
+    cmp byte [go], 0
+    je .wait
     xor bl, bl
     mov ax, 10
-    div bl                   ; Fehler 1, der Handler kehrt mit bl = 1 hierher zurueck
-    call ziel
+    div bl                   ; fault 1, the handler returns here with bl = 1
+    call target
     xor bl, bl
     mov ax, 10
-    div bl                   ; Fehler 3: Programmende im Handler
-    mov ax, 0x4C01           ; nie erreicht
+    div bl                   ; fault 3: program end in the handler
+    mov ax, 0x4C01           ; never reached
     int 0x21
 handler:
-    inc byte [zaehler]
-    cmp byte [zaehler], 1
-    je .erster
-    cmp byte [zaehler], 2
-    je .zweiter
+    inc byte [counter]
+    cmp byte [counter], 1
+    je .first
+    cmp byte [counter], 2
+    je .second
     push ds
-    lds dx, [alt_vektor]
+    lds dx, [old_vector]
     mov ax, 0x2500
     int 0x21
     pop ds
     mov ax, 0x4C00
     int 0x21
-.erster:
-    mov [merk_sp], sp
+.first:
+    mov [saved_sp], sp
     mov ax, 10
-    div bl                   ; bl noch 0: Fehler 2
-.zweiter:
-    mov sp, [merk_sp]        ; Rahmen von Fehler 2 verwerfen
+    div bl                   ; bl still 0: fault 2
+.second:
+    mov sp, [saved_sp]       ; discard the frame of fault 2
     mov bl, 1
     mov ax, 10
-    iret                     ; zum Rahmen von Fehler 1
+    iret                     ; to the frame of fault 1
     times 0x100 - ($ - $$) db 0xCC
-ziel:                        ; 0200
+target:                        ; 0200
     inc ax
     ret
     times 0x200 - ($ - $$) db 0
-alt_vektor dd 0              ; 0300
-merk_sp    dw 0              ; 0304
-zaehler    db 0              ; 0306
+old_vector dd 0              ; 0300
+saved_sp   dw 0              ; 0304
+counter    db 0              ; 0306
     times 0x2F1 - ($ - $$) db 0
-los        db 0              ; 03F1
+go         db 0              ; 03F1
