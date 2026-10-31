@@ -468,7 +468,7 @@ class Dosbox:
         """Write the last `count` control flow transfers (oldest first) to <name>.jsonl."""
         return self.call("flow.recent", count=count, name=name)
 
-    # --- Call log (D29) ---
+    # --- Call log ---
     def calls_start(self, targets=None, ranges=None, modules=None, ints=None, stack_bytes=None, max_per_target=1000,
                     max_bytes=None, name="calls", states=0, max_states=1000):
         """Record every call to the filtered targets in <name>.jsonl (one entry per call, written at the
@@ -502,7 +502,7 @@ class Dosbox:
     def calls_status(self):
         return self.call("calls.status")
 
-    # --- Run a single function (D31) ---
+    # --- Run a single function ---
     def func_run(self, state, write=None, regs=None, stack=None, irqs=False, max_instructions=None, name="func",
                  timeout_s=60.0):
         """Load a savestate from calls_start(states=N) (field state), optionally set registers (regs

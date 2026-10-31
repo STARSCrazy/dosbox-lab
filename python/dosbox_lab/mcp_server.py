@@ -475,7 +475,7 @@ def calls_start(targets: Optional[list[str]] = None, ranges: Optional[list[dict]
                 stack_bytes: Optional[int] = None, max_per_target: int = 1000, max_bytes: Optional[int] = None,
                 name: str = "calls", states: int = 0, max_states: int = 1000,
                 instance: Optional[str] = None) -> dict:
-    """Call log (D29) to <output_dir>/<name>.jsonl: one entry per call with registers/flags/stack on entry and
+    """Call log to <output_dir>/<name>.jsonl: one entry per call with registers/flags/stack on entry and
     registers on return. At least one filter is required: targets (addresses/symbols), ranges
     [{"from","to"}], modules (module names), ints [{"number": "21", "ah": "3F"}]. stack_bytes defaults to
     32 (16 bit) / 64 (32 bit). states=N: save the state on entry of the first N calls per target (field
@@ -489,7 +489,7 @@ def calls_start(targets: Optional[list[str]] = None, ranges: Optional[list[dict]
 def func_run(state: str, write: Optional[list[dict]] = None, regs: Optional[dict] = None,
              stack: Optional[str] = None, irqs: bool = False, max_instructions: Optional[int] = None,
              name: str = "func", timeout_s: float = 60.0, instance: Optional[str] = None) -> dict:
-    """Re-run a recorded call (D31): loads state (field "state" from calls.jsonl, created by
+    """Re-run a recorded call: loads state (field "state" from calls.jsonl, created by
     calls_start(states=N)), optionally sets regs {"eax": "0x10"}, stack (hex, from SS:ESP) and write
     [{"address": "l:...", "hex": "..."}] (e.g. reconstructed code bytes), and runs until the return.
     Returns: end, regs_out, changed (memory ranges with before/after), ints. Hardware IRQs are held back unless

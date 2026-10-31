@@ -4,6 +4,8 @@ dosbox-lab is a fork of [DOSBox-X](https://github.com/joncampbell123/dosbox-x) f
 
 The extension talks to a Python package (`dosbox_lab`) that offers an MCP server with about 70 tools, a Python API and a command line. (`dmcp` in the C++ sources stands for "DOSBox machine control protocol".)
 
+Typical uses: reverse engineering and decompiling DOS games and programs, recording what code actually runs, re-running single functions to compare an original with a rebuilt version, and driving old DOS compilers from modern scripts.
+
 ## Capabilities
 
 - Breakpoints (code, conditional, one-shot, INT breakpoints) and memory watchpoints, with an access log
@@ -17,40 +19,57 @@ The extension talks to a Python package (`dosbox_lab`) that offers an MCP server
 - Scenarios: scripted, repeatable runs described in JSON, with recordings
 - Headless batch runs, for example to drive old DOS compilers, with captured console output
 - Several parallel instances, each with its own run folder
-- Screenshots, screen text, keyboard and mouse input injected by the agent
+- Screenshots, screen text, keyboard and mouse input injected into the emulator (the host mouse and keyboard are never touched)
+
+## Requirements
+
+- Windows x64 (a Linux build of the extension has not been tried yet)
+- Visual Studio 2019 Build Tools (MSBuild, C++ x64) to build the emulator
+- Python 3.10 or newer
+- NASM, only if you want to rebuild the test programs
 
 ## Build
-
-Windows only for now (Visual Studio 2019 Build Tools, x64):
 
 ```powershell
 .\build.ps1          # Release SDL2 | x64 -> bin\x64\Release SDL2\dosbox-lab.exe
 .\build.ps1 -Clean   # full rebuild
 ```
 
-`build.ps1` finds MSBuild through `MSBUILD`, `vswhere` or `PATH`, and enables the agent code with
-`/DC_DOSBOX_AGENT=1 /DC_DMCP=1`. Test programs (`testprogs/`) are assembled with NASM (`NASM` environment variable
-or `nasm` on `PATH`): `testprogs\build.ps1`.
+`build.ps1` finds MSBuild through the `MSBUILD` environment variable, `vswhere` or `PATH`, and enables the extension with `/DC_DOSBOX_AGENT=1 /DC_DMCP=1`. The test programs in `testprogs/` are already checked in; to rebuild them run `testprogs\build.ps1` (NASM from the `NASM` environment variable or from `PATH`).
 
 ## Install the Python package
 
-```
-pip install ./python
+```powershell
+pip install -e ./python
 ```
 
-This provides the commands `dosbox-lab` (command line) and `dosbox-lab-mcp` (MCP server over stdio), and
-`python -m dosbox_lab`. By default the emulator is looked up in `bin\x64\Release SDL2\dosbox-lab.exe` inside the
-checkout; set `DOSBOX_LAB_EXE` to use another file. Run folders go to `.runs/` (override: `DOSBOX_LAB_RUNS`).
+This provides the commands `dosbox-lab` (command line) and `dosbox-lab-mcp` (MCP server over stdio), and `python -m dosbox_lab`.
+
+The emulator is looked up in `bin\x64\Release SDL2\dosbox-lab.exe` inside this checkout, which is why the editable install (`-e`) is recommended. To use another file, set `DOSBOX_LAB_EXE`. Run folders (logs, screenshots, recordings) go to `.runs/` in the checkout; override with `DOSBOX_LAB_RUNS`.
 
 ## Use with an MCP client
 
-```
+```powershell
 claude mcp add dosbox-lab -- dosbox-lab-mcp
 ```
 
-A configuration example for other clients is in `python/mcp.example.json`. The tools are listed in
-[docs/dosbox-lab/tools.md](docs/dosbox-lab/tools.md), the recording formats in
-[docs/dosbox-lab/formats.md](docs/dosbox-lab/formats.md).
+A configuration example for other clients is in [python/mcp.example.json](python/mcp.example.json). All tools are listed in [docs/dosbox-lab/tools.md](docs/dosbox-lab/tools.md), the recording formats in [docs/dosbox-lab/formats.md](docs/dosbox-lab/formats.md).
+
+## Command line
+
+```powershell
+dosbox-lab start --dir C:\games\demo --cmd GAME.EXE --headless
+dosbox-lab pause
+dosbox-lab regs
+dosbox-lab read 0043:000406F1 16
+dosbox-lab shot
+dosbox-lab stop
+
+# run a DOS command headless and return its output and exit code, e.g. an old compiler
+dosbox-lab batch --dir C:\work --d C:\compilers\tc --cmd "TCC HELLO.C"
+```
+
+`dosbox-lab --help` and `dosbox-lab <command> --help` list all commands and options.
 
 ## Python example
 
@@ -60,7 +79,7 @@ from dosbox_lab.instance import Mount
 
 box = Dosbox.start(mounts=[Mount("C", r"C:\games\demo")], autoexec=["GAME.EXE"], headless=True)
 try:
-    box.break_add(ziel="0043:000406F1")        # breakpoint, any address form
+    box.break_add(target="0043:000406F1")      # breakpoint, any address form
     box.pause()                                # or box.run_until(...)
     print(box.registers())
     print(box.mem_read("l:010406F1", 16).hex())
@@ -69,18 +88,22 @@ finally:
     box.stop()
 ```
 
+## Tests
+
+```powershell
+cd python
+python -m unittest discover -s tests -t .
+```
+
+The tests start real emulator instances (build first). One test checks that the host mouse cursor is never moved, so do not move the mouse while the tests run.
+
 ## Status
 
-Windows only. A Linux build of the extension has not been tried. The tool and parameter names and the doc strings
-are partly German (the project grew out of a German-language workflow); they are stable but may be translated.
+Version 0.1.0. Windows only. The interface was renamed from an earlier internal version; old names are listed in [docs/dosbox-lab/MIGRATION.md](docs/dosbox-lab/MIGRATION.md), and old scenario and symbol files are still read.
 
 ## Relationship to DOSBox-X
 
-dosbox-lab is a fork of DOSBox-X and keeps its complete upstream history. Our own changes live in
-`src/agent/ext/`, `include/agent/dmcp.h`, `python/` and `testprogs/`, plus small hooks in a few DOSBox-X source
-files, each marked with `// DOSBOX-LAB hook`. Upstream changes are taken over by merging from
-[joncampbell123/dosbox-x](https://github.com/joncampbell123/dosbox-x). The original DOSBox-X readme is kept as
-[README.dosbox-x.md](README.dosbox-x.md).
+dosbox-lab is a fork of DOSBox-X and keeps its complete upstream history. Our own changes live in `src/agent/ext/`, `include/agent/dmcp.h`, `python/` and `testprogs/`, plus small hooks in a few DOSBox-X source files, each marked with `// DOSBOX-LAB hook`. Upstream changes are taken over by merging from [joncampbell123/dosbox-x](https://github.com/joncampbell123/dosbox-x). The original DOSBox-X readme is kept as [README.dosbox-x.md](README.dosbox-x.md).
 
 ## License
 
