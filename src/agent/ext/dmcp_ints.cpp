@@ -39,15 +39,15 @@ struct DpmiName {
 };
 
 const DpmiName kDpmi[] = {
-    {0x0000, "ldt_deskriptoren_anlegen"}, {0x0001, "ldt_deskriptor_freigeben"}, {0x0002, "segment_zu_deskriptor"},
-    {0x0003, "selektor_schrittweite"},    {0x0006, "segmentbasis_lesen"},       {0x0007, "segmentbasis_setzen"},
-    {0x0008, "segmentlimit_setzen"},      {0x0009, "zugriffsrechte_setzen"},    {0x000A, "alias_deskriptor"},
-    {0x000B, "deskriptor_lesen"},         {0x000C, "deskriptor_setzen"},        {0x0100, "dos_speicher_anlegen"},
-    {0x0101, "dos_speicher_freigeben"},   {0x0200, "rm_vektor_lesen"},          {0x0201, "rm_vektor_setzen"},
-    {0x0204, "pm_vektor_lesen"},          {0x0205, "pm_vektor_setzen"},         {0x0300, "rm_interrupt_simulieren"},
-    {0x0301, "rm_far_call"},              {0x0400, "version"},                  {0x0500, "freier_speicher"},
-    {0x0501, "speicher_anlegen"},         {0x0502, "speicher_freigeben"},       {0x0503, "speicher_groesse_aendern"},
-    {0x0600, "bereich_sperren"},          {0x0601, "bereich_entsperren"},       {0x0800, "physisch_abbilden"},
+    {0x0000, "ldt_descriptors_allocate"}, {0x0001, "ldt_descriptor_free"}, {0x0002, "segment_to_descriptor"},
+    {0x0003, "selector_increment"},    {0x0006, "segment_base_get"},       {0x0007, "segment_base_set"},
+    {0x0008, "segment_limit_set"},      {0x0009, "access_rights_set"},    {0x000A, "alias_descriptor"},
+    {0x000B, "descriptor_get"},         {0x000C, "descriptor_set"},        {0x0100, "dos_memory_allocate"},
+    {0x0101, "dos_memory_free"},   {0x0200, "rm_vector_get"},          {0x0201, "rm_vector_set"},
+    {0x0204, "pm_vector_get"},          {0x0205, "pm_vector_set"},         {0x0300, "rm_interrupt_simulate"},
+    {0x0301, "rm_far_call"},              {0x0400, "version"},                  {0x0500, "free_memory"},
+    {0x0501, "memory_allocate"},         {0x0502, "memory_free"},       {0x0503, "memory_resize"},
+    {0x0600, "region_lock"},          {0x0601, "region_unlock"},       {0x0800, "physical_map"},
 };
 
 bool InPm() { return cpu.pmode && !GETFLAG(VM); }
@@ -116,14 +116,14 @@ void AddStrings(uint8_t num, JsonValue* event)
         Set(event, "text", Str(ReadString(ds, dx, '$', 256)));
         break;
     case 0x39: case 0x3A: case 0x3B: case 0x3C: case 0x3D: case 0x41: case 0x43: case 0x4B: case 0x4E: case 0x5B:
-        Set(event, "dateiname", Str(ReadString(ds, dx, 0, 128)));
+        Set(event, "filename", Str(ReadString(ds, dx, 0, 128)));
         break;
     case 0x56:
-        Set(event, "dateiname", Str(ReadString(ds, dx, 0, 128)));
-        Set(event, "neuer_name", Str(ReadString(es, wide ? reg_edi : reg_di, 0, 128)));
+        Set(event, "filename", Str(ReadString(ds, dx, 0, 128)));
+        Set(event, "new_name", Str(ReadString(es, wide ? reg_edi : reg_di, 0, 128)));
         break;
     case 0x6C:
-        Set(event, "dateiname", Str(ReadString(ds, wide ? reg_esi : reg_si, 0, 128)));
+        Set(event, "filename", Str(ReadString(ds, wide ? reg_esi : reg_si, 0, 128)));
         break;
     default:
         break;
@@ -135,56 +135,56 @@ JsonValue DpmiInput(uint16_t ax)
     JsonValue in = JsonValue::Object();
     switch (ax) {
     case 0x0000:
-        Set(&in, "anzahl", Num(reg_cx));
+        Set(&in, "count", Num(reg_cx));
         break;
     case 0x0001: case 0x0006: case 0x000A: case 0x000B: case 0x000C:
-        Set(&in, "selektor", HexOut(reg_bx, 4, true));
+        Set(&in, "selector", HexOut(reg_bx, 4, true));
         break;
     case 0x0002:
         Set(&in, "segment", HexOut(reg_bx, 4, true));
         break;
     case 0x0007:
-        Set(&in, "selektor", HexOut(reg_bx, 4, true));
-        Set(&in, "basis", HexOut(Pair(reg_cx, reg_dx), 8, true));
+        Set(&in, "selector", HexOut(reg_bx, 4, true));
+        Set(&in, "base", HexOut(Pair(reg_cx, reg_dx), 8, true));
         break;
     case 0x0008:
-        Set(&in, "selektor", HexOut(reg_bx, 4, true));
+        Set(&in, "selector", HexOut(reg_bx, 4, true));
         Set(&in, "limit", HexOut(Pair(reg_cx, reg_dx), 8, true));
         break;
     case 0x0009:
-        Set(&in, "selektor", HexOut(reg_bx, 4, true));
-        Set(&in, "rechte", HexOut(reg_cx, 4, true));
+        Set(&in, "selector", HexOut(reg_bx, 4, true));
+        Set(&in, "rights", HexOut(reg_cx, 4, true));
         break;
     case 0x0100:
-        Set(&in, "paragraphen", HexOut(reg_bx, 4, true));
+        Set(&in, "paragraphs", HexOut(reg_bx, 4, true));
         break;
     case 0x0101:
-        Set(&in, "selektor", HexOut(reg_dx, 4, true));
+        Set(&in, "selector", HexOut(reg_dx, 4, true));
         break;
     case 0x0200: case 0x0204: case 0x0300:
-        Set(&in, "vektor", HexOut(reg_bl, 2, true));
+        Set(&in, "vector", HexOut(reg_bl, 2, true));
         break;
     case 0x0201:
-        Set(&in, "vektor", HexOut(reg_bl, 2, true));
-        Set(&in, "ziel", Str(SegOffText(reg_cx, reg_dx, 4)));
+        Set(&in, "vector", HexOut(reg_bl, 2, true));
+        Set(&in, "target", Str(SegOffText(reg_cx, reg_dx, 4)));
         break;
     case 0x0205:
-        Set(&in, "vektor", HexOut(reg_bl, 2, true));
-        Set(&in, "ziel", Str(SegOffText(reg_cx, cpu.code.big ? reg_edx : reg_dx, cpu.code.big ? 8 : 4)));
+        Set(&in, "vector", HexOut(reg_bl, 2, true));
+        Set(&in, "target", Str(SegOffText(reg_cx, cpu.code.big ? reg_edx : reg_dx, cpu.code.big ? 8 : 4)));
         break;
     case 0x0501:
-        Set(&in, "groesse", HexOut(Pair(reg_bx, reg_cx), 8, true));
+        Set(&in, "size", HexOut(Pair(reg_bx, reg_cx), 8, true));
         break;
     case 0x0502:
         Set(&in, "handle", HexOut(Pair(reg_si, reg_di), 8, true));
         break;
     case 0x0503:
-        Set(&in, "groesse", HexOut(Pair(reg_bx, reg_cx), 8, true));
+        Set(&in, "size", HexOut(Pair(reg_bx, reg_cx), 8, true));
         Set(&in, "handle", HexOut(Pair(reg_si, reg_di), 8, true));
         break;
     case 0x0800:
         Set(&in, "phys", HexOut(Pair(reg_bx, reg_cx), 8, true));
-        Set(&in, "groesse", HexOut(Pair(reg_si, reg_di), 8, true));
+        Set(&in, "size", HexOut(Pair(reg_si, reg_di), 8, true));
         break;
     default:
         break;
@@ -197,20 +197,20 @@ JsonValue DpmiResult(uint16_t ax)
     JsonValue out = JsonValue::Object();
     switch (ax) {
     case 0x0000: case 0x0002: case 0x000A:
-        Set(&out, "selektor", HexOut(reg_ax, 4, true));
+        Set(&out, "selector", HexOut(reg_ax, 4, true));
         break;
     case 0x0006:
-        Set(&out, "basis", HexOut(Pair(reg_cx, reg_dx), 8, true));
+        Set(&out, "base", HexOut(Pair(reg_cx, reg_dx), 8, true));
         break;
     case 0x0100:
         Set(&out, "segment", HexOut(reg_ax, 4, true));
-        Set(&out, "selektor", HexOut(reg_dx, 4, true));
+        Set(&out, "selector", HexOut(reg_dx, 4, true));
         break;
     case 0x0200:
-        Set(&out, "ziel", Str(SegOffText(reg_cx, reg_dx, 4)));
+        Set(&out, "target", Str(SegOffText(reg_cx, reg_dx, 4)));
         break;
     case 0x0204:
-        Set(&out, "ziel", Str(SegOffText(reg_cx, cpu.code.big ? reg_edx : reg_dx, cpu.code.big ? 8 : 4)));
+        Set(&out, "target", Str(SegOffText(reg_cx, cpu.code.big ? reg_edx : reg_dx, cpu.code.big ? 8 : 4)));
         break;
     case 0x0501: case 0x0503:
         Set(&out, "linear", HexOut(Pair(reg_bx, reg_cx), 8, true));
@@ -229,13 +229,13 @@ void EmitReturn(const OpenInt& open)
 {
     FillFlags();
     JsonValue event = JsonValue::Object();
-    Set(&event, "zu_nr", Num(open.nr));
-    Set(&event, "nummer", HexOut(open.num, 2, true));
-    Set(&event, "ax_vorher", HexOut(open.ax, 4, true));
+    Set(&event, "to_nr", Num(open.nr));
+    Set(&event, "number", HexOut(open.num, 2, true));
+    Set(&event, "ax_before", HexOut(open.ax, 4, true));
     Set(&event, "register", RegistersJson());
     Set(&event, "cf", Bool((reg_flags & FLAG_CF) != 0));
     if (open.num == 0x31)
-        Set(&event, "ergebnis", DpmiResult(open.ax));
+        Set(&event, "result", DpmiResult(open.ax));
     EmitEvent("int_ret", event);
 }
 
@@ -252,24 +252,24 @@ void IntsOnSoftwareInterrupt(uint8_t num, uint32_t oldeip)
     if (!IntWanted(num, reg_ax, pm))
         return;
     JsonValue event = JsonValue::Object();
-    Set(&event, "nummer", HexOut(num, 2, true));
+    Set(&event, "number", HexOut(num, 2, true));
     Set(&event, "ax", HexOut(reg_ax, 4, true));
-    Set(&event, "modus", Str(!cpu.pmode ? "real" : (GETFLAG(VM) ? "v86" : "pm")));
+    Set(&event, "mode", Str(!cpu.pmode ? "real" : (GETFLAG(VM) ? "v86" : "pm")));
     Set(&event, "register", RegistersJson());
     AddStrings(num, &event);
     if (num == 0x31) {
         JsonValue dpmi = JsonValue::Object();
-        Set(&dpmi, "funktion", HexOut(reg_ax, 4, true));
+        Set(&dpmi, "function", HexOut(reg_ax, 4, true));
         for (const DpmiName& entry : kDpmi)
             if (entry.ax == reg_ax)
                 Set(&dpmi, "name", Str(entry.name));
-        Set(&dpmi, "eingabe", DpmiInput(reg_ax));
+        Set(&dpmi, "input", DpmiInput(reg_ax));
         Set(&event, "dpmi", dpmi);
     }
     if (!pm) {
         for (auto it = g_open.rbegin(); it != g_open.rend(); ++it) {
             if (it->pm) {
-                Set(&event, "weitergereicht_von", Num(it->nr));
+                Set(&event, "passed_on_from", Num(it->nr));
                 break;
             }
         }

@@ -27,10 +27,10 @@ struct Context {
     uint16_t sel = 0;
     uint32_t base = 0;
     uint8_t bits = 16;
-    uint8_t modus = 0; // 0 real, 1 v86, 2 pm
+    uint8_t mode = 0; // 0 real, 1 v86, 2 pm
     bool operator<(const Context& o) const
     {
-        return std::tie(modus, sel, base, bits) < std::tie(o.modus, o.sel, o.base, o.bits);
+        return std::tie(mode, sel, base, bits) < std::tie(o.mode, o.sel, o.base, o.bits);
     }
 };
 
@@ -73,11 +73,11 @@ uint64_t PopCount(const std::vector<uint8_t>& bits)
 JsonValue ContextJson(uint32_t block_start, const Block& block, const Context& c)
 {
     JsonValue k = JsonValue::Object();
-    if (c.modus == 2) {
+    if (c.mode == 2) {
         Set(&k, "sel", HexOut(c.sel, 4, true));
-        Set(&k, "basis_linear", HexOut(c.base, 8, true));
+        Set(&k, "base_linear", HexOut(c.base, 8, true));
         Set(&k, "bits", Num(c.bits));
-        Set(&k, "modus", Str("pm"));
+        Set(&k, "mode", Str("pm"));
         // first executed byte of the block decides the module (a block may start before the module)
         for (size_t i = 0; i < kBitmapBytes; ++i) {
             if (block.bits[i] == 0)
@@ -89,21 +89,21 @@ JsonValue ContextJson(uint32_t block_start, const Block& block, const Context& c
             uint32_t va = 0;
             const Module* m = ModuleForLinear(first, &va);
             if (m != nullptr) {
-                Set(&k, "modul", Str(m->name));
-                Set(&k, "va_start", HexOut(va - (first - block_start), 8, true)); // (linear_start - basis) mod 2^32
+                Set(&k, "module", Str(m->name));
+                Set(&k, "va_start", HexOut(va - (first - block_start), 8, true)); // (linear_start - base) mod 2^32
             }
             break;
         }
         return k;
     }
     Set(&k, "seg", HexOut(c.sel, 4, true));
-    Set(&k, "modus", Str(c.modus == 1 ? "v86" : "real"));
+    Set(&k, "mode", Str(c.mode == 1 ? "v86" : "real"));
     Set(&k, "bits", Num(16));
     const Module* m = ModuleForRealSeg(c.sel);
     if (m != nullptr) {
-        Set(&k, "modul", Str(m->name));
-        if (c.sel >= m->rel_basis)
-            Set(&k, "rel_seg", HexOut(static_cast<uint32_t>(c.sel - m->rel_basis), 4, true));
+        Set(&k, "module", Str(m->name));
+        if (c.sel >= m->rel_base)
+            Set(&k, "rel_seg", HexOut(static_cast<uint32_t>(c.sel - m->rel_base), 4, true));
     }
     return k;
 }
@@ -140,7 +140,7 @@ bool Save(const std::string& name, JsonValue* result, Error* error)
         JsonValue contexts = JsonValue::Array();
         for (const Context& c : entry->second.contexts)
             contexts.array.push_back(ContextJson(entry->first, entry->second, c));
-        Set(&block, "kontexte", contexts);
+        Set(&block, "contexts", contexts);
         blocks.array.push_back(block);
     }
     std::string bin_path;
@@ -149,8 +149,8 @@ bool Save(const std::string& name, JsonValue* result, Error* error)
     JsonValue meta = JsonValue::Object();
     Set(&meta, "format", Str("dosbox-lab-coverage/1"));
     Set(&meta, "bin", Str(name + ".bin"));
-    Set(&meta, "blockgroesse", Num(kBlockSize));
-    Set(&meta, "bloecke", blocks);
+    Set(&meta, "block_size", Num(kBlockSize));
+    Set(&meta, "blocks", blocks);
     const std::string text = dosbox_agent::AGENT_SerializeJson(meta);
     std::string json_path;
     if (!WriteOutputFile(name + ".json", text.data(), text.size(), &json_path, error))
@@ -162,29 +162,29 @@ bool Save(const std::string& name, JsonValue* result, Error* error)
         for (const auto& hit : sorted) {
             JsonValue line = JsonValue::Object();
             Set(&line, "linear", HexOut(hit.first, 8, true));
-            Set(&line, "treffer", Num(hit.second));
+            Set(&line, "hits", Num(hit.second));
             lines += dosbox_agent::AGENT_SerializeJson(line) + "\n";
         }
         std::string hits_path;
         if (!WriteOutputFile(name + "_hits.jsonl", lines.data(), lines.size(), &hits_path, error))
             return false;
-        Set(result, "hits_pfad", Str(hits_path));
+        Set(result, "hits_path", Str(hits_path));
     }
-    Set(result, "pfad", Str(bin_path));
-    Set(result, "json_pfad", Str(json_path));
-    Set(result, "bloecke", Num(used.size()));
-    Set(result, "befehle", Num(instructions));
+    Set(result, "path", Str(bin_path));
+    Set(result, "json_path", Str(json_path));
+    Set(result, "blocks", Num(used.size()));
+    Set(result, "instructions", Num(instructions));
     return true;
 }
 
 JsonValue StatusJson()
 {
     JsonValue r = JsonValue::Object();
-    Set(&r, "aktiv", Bool(g_active));
+    Set(&r, "active", Bool(g_active));
     Set(&r, "hits", Bool(g_hits_on));
-    Set(&r, "bloecke", Num(g_blocks.size()));
-    Set(&r, "max_bloecke", Num(g_max_blocks));
-    Set(&r, "limit_erreicht", Bool(g_limit_hit));
+    Set(&r, "blocks", Num(g_blocks.size()));
+    Set(&r, "max_blocks", Num(g_max_blocks));
+    Set(&r, "limit_reached_flag", Bool(g_limit_hit));
     return r;
 }
 
@@ -202,7 +202,7 @@ void CoverageHit(uint32_t linear)
     }
     if (g_hits.size() >= kMaxHits) {
         if (!g_hits_limit)
-            ReportLimit("coverage_hits", "max " + std::to_string(kMaxHits) + " Blockanfaenge");
+            ReportLimit("coverage_hits", "max " + std::to_string(kMaxHits) + " block starts");
         g_hits_limit = true;
         return;
     }
@@ -217,7 +217,7 @@ void CoverageOnInstruction(uint32_t linear)
         if (it == g_blocks.end()) {
             if (g_blocks.size() >= g_max_blocks) {
                 Stop(true);
-                ReportLimit("coverage", "max_bloecke " + std::to_string(g_max_blocks));
+                ReportLimit("coverage", "max_blocks " + std::to_string(g_max_blocks));
                 return;
             }
             it = g_blocks.emplace(start, Block()).first;
@@ -227,14 +227,14 @@ void CoverageOnInstruction(uint32_t linear)
         g_ctx_valid = false;
     }
     g_last->bits[(linear & (kBlockSize - 1)) >> 3] |= static_cast<uint8_t>(1u << (linear & 7u));
-    const uint8_t modus = !cpu.pmode ? 0 : (GETFLAG(VM) ? 1 : 2);
+    const uint8_t mode = !cpu.pmode ? 0 : (GETFLAG(VM) ? 1 : 2);
     const uint16_t sel = static_cast<uint16_t>(SegValue(cs));
     const uint32_t base = static_cast<uint32_t>(SegPhys(cs));
-    if (!g_ctx_valid || g_ctx.sel != sel || g_ctx.base != base || g_ctx.modus != modus) {
+    if (!g_ctx_valid || g_ctx.sel != sel || g_ctx.base != base || g_ctx.mode != mode) {
         g_ctx.sel = sel;
         g_ctx.base = base;
         g_ctx.bits = cpu.code.big ? 32 : 16;
-        g_ctx.modus = modus;
+        g_ctx.mode = mode;
         g_last->contexts.insert(g_ctx);
         g_ctx_valid = true;
     }
@@ -245,11 +245,11 @@ void RegisterCoverage()
     Register("coverage.start", [](const JsonValue& params, JsonValue* result, Error* error) {
         uint64_t max_blocks = 4096;
         bool keep = false;
-        if (Param(params, "max_bloecke") != nullptr &&
-            (!ParamU64(params, "max_bloecke", &max_blocks) || max_blocks == 0 || max_blocks > 65536))
-            return Fail(error, "bad_argument", "max_bloecke must be between 1 and 65536");
-        if (Param(params, "fortsetzen") != nullptr && !ParamBool(params, "fortsetzen", &keep))
-            return Fail(error, "bad_argument", "fortsetzen must be true or false");
+        if (Param(params, "max_blocks") != nullptr &&
+            (!ParamU64(params, "max_blocks", &max_blocks) || max_blocks == 0 || max_blocks > 65536))
+            return Fail(error, "bad_argument", "max_blocks must be between 1 and 65536");
+        if (Param(params, "resume") != nullptr && !ParamBool(params, "resume", &keep))
+            return Fail(error, "bad_argument", "resume must be true or false");
         if (!keep)
             g_blocks.clear();
         bool hits = false;

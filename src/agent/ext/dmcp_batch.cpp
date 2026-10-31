@@ -104,16 +104,16 @@ bool EndsWithNoCase(const std::string& text, const char* suffix)
 void WriteStatusFile()
 {
     JsonValue status = JsonValue::Object();
-    Set(&status, "aktiv", Bool(g_batch.active));
-    Set(&status, "fertig", Bool(g_batch.finished));
+    Set(&status, "active", Bool(g_batch.active));
+    Set(&status, "done", Bool(g_batch.finished));
     if (g_batch.finished)
         Set(&status, "exit_code", Num(g_batch.exit_code));
-    Set(&status, "programme", Num(g_batch.programs));
+    Set(&status, "programs", Num(g_batch.programs));
     if (g_batch.has_last_exit)
-        Set(&status, "letzter_exit_code", Num(g_batch.last_exit));
+        Set(&status, "last_exit_code", Num(g_batch.last_exit));
     Set(&status, "stdout_bytes", Num(g_batch.out.bytes));
     Set(&status, "stderr_bytes", Num(g_batch.err.bytes));
-    Set(&status, "abgeschnitten", Bool(g_batch.truncated));
+    Set(&status, "truncated", Bool(g_batch.truncated));
     const std::string text = dosbox_agent::AGENT_SerializeJson(status) + "\n";
     const std::string path = OutputPath("batch.json");
     FILE* file = std::fopen(path.c_str(), "wb");
@@ -190,20 +190,20 @@ void RegisterBatch()
     Register("batch.status", [](const JsonValue&, JsonValue* result, Error*) {
         std::lock_guard<std::mutex> lock(g_mutex);
         *result = JsonValue::Object();
-        Set(result, "aktiv", Bool(g_batch.active));
-        Set(result, "fertig", Bool(g_batch.finished));
+        Set(result, "active", Bool(g_batch.active));
+        Set(result, "done", Bool(g_batch.finished));
         if (g_batch.finished)
             Set(result, "exit_code", Num(g_batch.exit_code));
-        Set(result, "programme", Num(g_batch.programs));
+        Set(result, "programs", Num(g_batch.programs));
         if (g_batch.has_last_exit)
-            Set(result, "letzter_exit_code", Num(g_batch.last_exit));
+            Set(result, "last_exit_code", Num(g_batch.last_exit));
         Set(result, "stdout_bytes", Num(g_batch.out.bytes));
         Set(result, "stderr_bytes", Num(g_batch.err.bytes));
-        Set(result, "abgeschnitten", Bool(g_batch.truncated));
-        Set(result, "stdout_pfad", Str(g_batch.out.path));
-        Set(result, "stderr_pfad", Str(g_batch.err.path));
+        Set(result, "truncated", Bool(g_batch.truncated));
+        Set(result, "stdout_path", Str(g_batch.out.path));
+        Set(result, "stderr_path", Str(g_batch.err.path));
         if (!g_batch.error.empty())
-            Set(result, "fehler", Str(g_batch.error));
+            Set(result, "error", Str(g_batch.error));
         return true;
     }, false); // transport thread: answers even while the emulator shuts down (EXIT ended the shell)
 }
@@ -218,7 +218,7 @@ public:
     {
         std::string arg;
         if (!cmd->FindCommand(1, arg)) {
-            WriteOut("DMCPBAT START [max_bytes] | ENDE\n");
+            WriteOut("DMCPBAT START [max_bytes] | END\n");
             return;
         }
         upcase(arg);
@@ -232,10 +232,10 @@ public:
                     max_bytes = parsed;
             }
             dmcp::BatchStart(max_bytes); // after any own output: DMCPBAT writes nothing into the capture
-        } else if (arg == "ENDE") {
+        } else if (arg == "END") {
             dmcp::BatchEnd();
         } else {
-            WriteOut("DMCPBAT: unknown argument (START or ENDE)\n");
+            WriteOut("DMCPBAT: unknown argument (START or END)\n");
         }
     }
 };

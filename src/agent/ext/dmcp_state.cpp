@@ -102,7 +102,7 @@ bool VerifyStateZip(const std::string& path, std::string* why)
 
 // Page count from the archive's own "Memory_Size" entry (decimal text, savestates.cpp). Upstream copies the
 // saved pages into MemBase without checking the size once force_load_state skips its confirmation box, so a
-// mismatch must never reach SaveState::load (also with ohne_pruefung or a stale sidecar).
+// mismatch must never reach SaveState::load (also with skip_check or a stale sidecar).
 bool StateZipPages(const std::string& path, unsigned long long* pages)
 {
     unzFile zf = unzOpen64(path.c_str());
@@ -197,7 +197,7 @@ std::string BaseWithout(const std::string& path, const std::string& ext)
 
 } // namespace
 
-bool SaveStateFile(const std::string& name, const JsonValue* aufruf, std::string* path_out, std::string* info_path,
+bool SaveStateFile(const std::string& name, const JsonValue* call, std::string* path_out, std::string* info_path,
                    uint64_t* size_out, Error* error)
 {
     if (!PlainName(name))
@@ -222,15 +222,15 @@ bool SaveStateFile(const std::string& name, const JsonValue* aufruf, std::string
         return Fail(error, "internal", "savestate was not written correctly (" + why + "): " + path);
     JsonValue info = JsonValue::Object();
     Set(&info, "format", Str("dosbox-lab-state/1"));
-    Set(&info, "speicher_seiten", Num(static_cast<uint64_t>(MEM_TotalPages())));
-    Set(&info, "maschine", Num(static_cast<uint64_t>(static_cast<int>(machine))));
+    Set(&info, "memory_pages", Num(static_cast<uint64_t>(MEM_TotalPages())));
+    Set(&info, "machine", Num(static_cast<uint64_t>(static_cast<int>(machine))));
     Set(&info, "version", Str(VERSION));
-    Set(&info, "zeit_ms", NumFixed(PIC_FullIndex()));
+    Set(&info, "time_ms", NumFixed(PIC_FullIndex()));
     Set(&info, "cs", Hex(SegValue(cs), 4));
     Set(&info, "eip", Hex(reg_eip, 8));
     Set(&info, "pmode", Bool(cpu.pmode));
-    if (aufruf != nullptr)
-        Set(&info, "aufruf", *aufruf);
+    if (call != nullptr)
+        Set(&info, "call", *call);
     const std::string text = dosbox_agent::AGENT_SerializeJson(info) + "\n";
     if (!WriteOutputFile(name + ".json", text.data(), text.size(), info_path, error))
         return false;
@@ -267,9 +267,9 @@ bool LoadStateFile(const std::string& path, bool unchecked, JsonValue* sidecar, 
             return Fail(error, "bad_argument", "damaged savestate (" + why + "): " + path);
         unsigned long long zip_pages = 0;
         if (!StateZipPages(path, &zip_pages))
-            return Fail(error, "bad_argument", "speicher: savestate has no readable Memory_Size entry: " + path);
+            return Fail(error, "bad_argument", "memory: savestate has no readable Memory_Size entry: " + path);
         if (zip_pages != MEM_TotalPages())
-            return Fail(error, "bad_argument", "speicher: savestate has " + std::to_string(zip_pages) +
+            return Fail(error, "bad_argument", "memory: savestate has " + std::to_string(zip_pages) +
                                                    " pages, this instance " + std::to_string(MEM_TotalPages()));
     }
     std::string text;
@@ -277,17 +277,17 @@ bool LoadStateFile(const std::string& path, bool unchecked, JsonValue* sidecar, 
     if (ReadFile(info_path, &text)) {
         std::string perr;
         unsigned long long pages = 0, mach = 0;
-        if (!dosbox_agent::AGENT_ParseJson(text, sidecar, &perr) || !SidecarNumber(*sidecar, "speicher_seiten", &pages) ||
-            !SidecarNumber(*sidecar, "maschine", &mach))
+        if (!dosbox_agent::AGENT_ParseJson(text, sidecar, &perr) || !SidecarNumber(*sidecar, "memory_pages", &pages) ||
+            !SidecarNumber(*sidecar, "machine", &mach))
             return Fail(error, "bad_argument", "sidecar " + info_path + " is not a dosbox-lab-state/1 file");
         if (pages != MEM_TotalPages())
-            return Fail(error, "bad_argument", "speicher: savestate has " + std::to_string(pages) +
+            return Fail(error, "bad_argument", "memory: savestate has " + std::to_string(pages) +
                                                    " pages, this instance " + std::to_string(MEM_TotalPages()));
         if (static_cast<int>(mach) != static_cast<int>(machine))
-            return Fail(error, "bad_argument", "maschine: savestate was made with another machine type");
+            return Fail(error, "bad_argument", "machine: savestate was made with another machine type");
     } else if (!unchecked) {
         return Fail(error, "bad_argument", "sidecar " + info_path +
-                                               " missing; pass ohne_pruefung:true to load without the check");
+                                               " missing; pass skip_check:true to load without the check");
     }
     try {
         UpstreamFileMode mode(path);
@@ -315,17 +315,17 @@ void RegisterState()
         uint64_t size = 0;
         if (!SaveStateFile(name, nullptr, &path, &info_path, &size, error))
             return false;
-        Set(result, "pfad", Str(path));
-        Set(result, "groesse", Num(size));
-        Set(result, "info_pfad", Str(info_path));
+        Set(result, "path", Str(path));
+        Set(result, "size", Num(size));
+        Set(result, "info_path", Str(info_path));
         return true;
     });
     Register("state.load", [](const JsonValue& params, JsonValue* result, Error* error) {
         std::string name, path;
         bool unchecked = false;
-        if (Param(params, "pfad") != nullptr) {
-            if (!ParamStr(params, "pfad", &path) || path.empty())
-                return Fail(error, "bad_argument", "pfad must be a non-empty string");
+        if (Param(params, "path") != nullptr) {
+            if (!ParamStr(params, "path", &path) || path.empty())
+                return Fail(error, "bad_argument", "path must be a non-empty string");
             // absolute or relative host path given by the caller
         } else if (Param(params, "name") == nullptr || ParamStr(params, "name", &name)) {
             if (name.empty())
@@ -334,15 +334,15 @@ void RegisterState()
                 return Fail(error, "bad_argument", "name must be a plain file name without path characters");
             path = OutputPath(name + ".sav");
         } else {
-            return Fail(error, "bad_argument", "name or pfad must be a string");
+            return Fail(error, "bad_argument", "name or path must be a string");
         }
-        if (Param(params, "ohne_pruefung") != nullptr && !ParamBool(params, "ohne_pruefung", &unchecked))
-            return Fail(error, "bad_argument", "ohne_pruefung must be true or false");
+        if (Param(params, "skip_check") != nullptr && !ParamBool(params, "skip_check", &unchecked))
+            return Fail(error, "bad_argument", "skip_check must be true or false");
         JsonValue sidecar;
         if (!LoadStateFile(path, unchecked, &sidecar, error))
             return false;
-        Set(result, "pfad", Str(path));
-        Set(result, "geladen", Bool(true));
+        Set(result, "path", Str(path));
+        Set(result, "loaded", Bool(true));
         Set(result, "cs", Hex(SegValue(cs), 4));
         Set(result, "eip", Hex(reg_eip, 8));
         Set(result, "pmode", Bool(cpu.pmode));

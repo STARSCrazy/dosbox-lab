@@ -16,7 +16,7 @@ namespace dmcp {
 typedef std::vector<std::pair<uint32_t, uint32_t>> RangeList; // [start, end); physical for p: addresses
 
 struct Address {
-    std::string modus;          // "real", "v86", "pm", "linear", "phys"
+    std::string mode;          // "real", "v86", "pm", "linear", "phys"
     bool has_selector = false;  // seg (real/v86) or selector (pm)
     uint16_t selector = 0;
     uint32_t offset = 0;
@@ -65,7 +65,7 @@ struct CodePoint {
     uint32_t base = 0;
     uint16_t selector = 0;
     uint8_t bits = 16;
-    uint8_t modus = 0; // 0 real, 1 v86, 2 pm
+    uint8_t mode = 0; // 0 real, 1 v86, 2 pm
 };
 // cs:eip from the CPU segment cache (no descriptor-table read; cheap enough for every instruction).
 CodePoint CurrentCodePoint();

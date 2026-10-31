@@ -81,7 +81,7 @@ void UpdateHookActive();
 // dmcp_exec.cpp: pause with the given stop_reason (clears the skip flag); resume like emu.continue.
 void StopAt(const std::string& reason);
 void Resume();
-// dmcp_exec.cpp: state.load drops the shared stop condition (run_until/step_over/frame_step/pause bis=pmode).
+// dmcp_exec.cpp: state.load drops the shared stop condition (run_until/step_over/frame_step/pause until=pmode).
 void DisarmForLoad();
 bool IsPaused();
 // dmcp_exec.cpp: true while emu.step / emu.step_over executes one instruction (paused, but guest code runs).
@@ -116,7 +116,7 @@ void LeOnExec(const char* raw_name, const std::string& module_name, uint16_t fla
 void LeOnSoftwareInterrupt(uint8_t num, uint32_t oldeip);
 void LeOnInstruction();
 void LeOnExit(uint16_t psp);
-// DMCP_OnExit: a program ended during the capture (errorlevel for batch.json / batch.status letzter_exit_code).
+// DMCP_OnExit: a program ended during the capture (errorlevel for batch.json / batch.status last_exit_code).
 void BatchOnExit(uint16_t psp, uint8_t exit_code);
 
 } // namespace dmcp

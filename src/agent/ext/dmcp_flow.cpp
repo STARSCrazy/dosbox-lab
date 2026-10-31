@@ -37,8 +37,8 @@ const char* KindName(Kind k)
     case Kind::Call: return "call";
     case Kind::Jmp: return "jmp";
     case Kind::Jcc: return "jcc";
-    case Kind::CallFarDirect: return "call_far_direkt";
-    case Kind::JmpFarDirect: return "jmp_far_direkt";
+    case Kind::CallFarDirect: return "call_far_direct";
+    case Kind::JmpFarDirect: return "jmp_far_direct";
     case Kind::Int: return "int";
     case Kind::Irq: return "irq";
     case Kind::Exception: return "exception";
@@ -223,7 +223,7 @@ void Resolve(const CodePoint& dst)
             if (g_pairs.size() >= g_max_pairs) {
                 g_indirect = false;
                 g_limit_hit = true;
-                ReportLimit("flow", "max_paare " + std::to_string(g_max_pairs));
+                ReportLimit("flow", "max_pairs " + std::to_string(g_max_pairs));
                 return;
             }
             PairValue value;
@@ -239,12 +239,12 @@ void Resolve(const CodePoint& dst)
 JsonValue EntryJson(Kind kind, uint8_t vector, const CodePoint& src, const CodePoint& dst)
 {
     JsonValue o = JsonValue::Object();
-    Set(&o, "art", Str(KindName(kind)));
-    Set(&o, "quelle", AddressJson(CodePointAddress(src), true));
-    Set(&o, "ziel", AddressJson(CodePointAddress(dst), true));
+    Set(&o, "kind", Str(KindName(kind)));
+    Set(&o, "source", AddressJson(CodePointAddress(src), true));
+    Set(&o, "target", AddressJson(CodePointAddress(dst), true));
     Set(&o, "bits", Num(src.bits));
     if (HasVector(kind))
-        Set(&o, "vektor", HexOut(vector, 2, true));
+        Set(&o, "vector", HexOut(vector, 2, true));
     return o;
 }
 
@@ -259,12 +259,12 @@ bool WriteLines(const std::string& file_name, const std::vector<JsonValue>& line
 JsonValue StatusJson()
 {
     JsonValue r = JsonValue::Object();
-    Set(&r, "aktiv", Bool(g_active));
-    Set(&r, "paare", Num(g_pairs.size()));
-    Set(&r, "ring_eintraege", Num(g_ring.size()));
-    Set(&r, "ring_gesamt", Num(g_ring_total));
-    Set(&r, "befehle", Num(g_insn));
-    Set(&r, "limit_erreicht", Bool(g_limit_hit));
+    Set(&r, "active", Bool(g_active));
+    Set(&r, "pairs", Num(g_pairs.size()));
+    Set(&r, "ring_entries", Num(g_ring.size()));
+    Set(&r, "ring_total", Num(g_ring_total));
+    Set(&r, "instructions", Num(g_insn));
+    Set(&r, "limit_reached_flag", Bool(g_limit_hit));
     return r;
 }
 
@@ -333,14 +333,14 @@ void RegisterFlow()
     Register("flow.start", [](const JsonValue& params, JsonValue* result, Error* error) {
         bool indirect = true, ring = true, returns = false;
         uint64_t ring_size = 4096, max_pairs = 1000000;
-        if (!OptionalBool(params, "indirekt", &indirect, error) || !OptionalBool(params, "ring", &ring, error) ||
-            !OptionalBool(params, "mit_returns", &returns, error))
+        if (!OptionalBool(params, "indirect", &indirect, error) || !OptionalBool(params, "ring", &ring, error) ||
+            !OptionalBool(params, "with_returns", &returns, error))
             return false;
-        if (Param(params, "ring_groesse") != nullptr &&
-            (!ParamU64(params, "ring_groesse", &ring_size) || ring_size == 0 || ring_size > 1000000))
-            return Fail(error, "bad_argument", "ring_groesse must be between 1 and 1000000");
-        if (Param(params, "max_paare") != nullptr && (!ParamU64(params, "max_paare", &max_pairs) || max_pairs == 0))
-            return Fail(error, "bad_argument", "max_paare must be positive");
+        if (Param(params, "ring_size") != nullptr &&
+            (!ParamU64(params, "ring_size", &ring_size) || ring_size == 0 || ring_size > 1000000))
+            return Fail(error, "bad_argument", "ring_size must be between 1 and 1000000");
+        if (Param(params, "max_pairs") != nullptr && (!ParamU64(params, "max_pairs", &max_pairs) || max_pairs == 0))
+            return Fail(error, "bad_argument", "max_pairs must be positive");
         g_indirect = indirect;
         g_ring_on = ring;
         g_returns = returns;
@@ -371,7 +371,7 @@ void RegisterFlow()
         return true;
     });
     Register("flow.save", [](const JsonValue& params, JsonValue* result, Error* error) {
-        std::string name = "indirekt";
+        std::string name = "indirect";
         if (Param(params, "name") != nullptr && !ParamStr(params, "name", &name))
             return Fail(error, "bad_argument", "name must be a string");
         std::vector<std::pair<const PairKey*, const PairValue*>> ordered;
@@ -385,22 +385,22 @@ void RegisterFlow()
         std::vector<JsonValue> lines;
         for (const auto& item : ordered) {
             JsonValue line = EntryJson(static_cast<Kind>(item.first->kind), 0, item.second->src, item.second->dst);
-            Set(&line, "anzahl", Num(item.second->count));
-            Set(&line, "erstes_nr", Num(item.second->first));
+            Set(&line, "count", Num(item.second->count));
+            Set(&line, "first_nr", Num(item.second->first));
             lines.push_back(line);
         }
         std::string path;
         if (!WriteLines(name + ".jsonl", lines, &path, error))
             return false;
-        Set(result, "pfad", Str(path));
-        Set(result, "paare", Num(lines.size()));
+        Set(result, "path", Str(path));
+        Set(result, "pairs", Num(lines.size()));
         return true;
     });
     Register("flow.recent", [](const JsonValue& params, JsonValue* result, Error* error) {
         uint64_t count = 100;
         std::string name = "recent";
-        if (Param(params, "anzahl") != nullptr && (!ParamU64(params, "anzahl", &count) || count == 0))
-            return Fail(error, "bad_argument", "anzahl must be positive");
+        if (Param(params, "count") != nullptr && (!ParamU64(params, "count", &count) || count == 0))
+            return Fail(error, "bad_argument", "count must be positive");
         if (Param(params, "name") != nullptr && !ParamStr(params, "name", &name))
             return Fail(error, "bad_argument", "name must be a string");
         const size_t have = g_ring.size();
@@ -416,8 +416,8 @@ void RegisterFlow()
         std::string path;
         if (!WriteLines(name + ".jsonl", lines, &path, error))
             return false;
-        Set(result, "pfad", Str(path));
-        Set(result, "anzahl", Num(lines.size()));
+        Set(result, "path", Str(path));
+        Set(result, "count", Num(lines.size()));
         return true;
     });
 }

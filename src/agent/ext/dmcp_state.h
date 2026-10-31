@@ -10,8 +10,8 @@
 namespace dmcp {
 
 // Writes <name>.sav and the sidecar <name>.json (dosbox-lab-state/1) into the output directory.
-// aufruf != nullptr adds the field "aufruf" (D31: expected return of a recorded call).
-bool SaveStateFile(const std::string& name, const JsonValue* aufruf, std::string* path, std::string* info_path,
+// call != nullptr adds the field "call" (D31: expected return of a recorded call).
+bool SaveStateFile(const std::string& name, const JsonValue* call, std::string* path, std::string* info_path,
                    uint64_t* size, Error* error);
 // All checks of state.load, then loads and resets agent state that belongs to the replaced machine state.
 // *sidecar = parsed sidecar object, or null JSON when none exists (only allowed with unchecked).

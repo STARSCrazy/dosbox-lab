@@ -83,8 +83,8 @@ private:
 
 void Unusable(LeInfo* le, const char* why)
 {
-    le->zuordnung = "kein_le";
-    le->hinweis = why;
+    le->assignment = "not_le";
+    le->hint = why;
     le->objects.clear();
 }
 
@@ -97,7 +97,7 @@ void ParseLe(DriveFile& file, LeInfo* le)
     uint8_t sig[2];
     if (off == 0 || !file.ReadAt(off, sig, 2) || sig[0] != 'L' || sig[1] != 'E')
         return;
-    le->vorhanden = true;
+    le->present = true;
     uint8_t hdr[kHeaderSize];
     if (!file.ReadAt(off, hdr, kHeaderSize))
         return Unusable(le, "LE header extends beyond the end of the file");
@@ -133,7 +133,7 @@ void ParseLe(DriveFile& file, LeInfo* le)
         return Unusable(le, "LE entry point outside its object");
     le->eip_object = eip_object - 1;
     le->eip = eip;
-    le->zuordnung = "offen";
+    le->assignment = "open";
 }
 
 const uint32_t kMaxAllocations = 256;
@@ -164,8 +164,8 @@ void StopObserving()
 
 void GiveUp(Module& m, const std::string& why)
 {
-    m.le.zuordnung = "aufgegeben";
-    m.le.hinweis = why;
+    m.le.assignment = "abandoned";
+    m.le.hint = why;
     StopObserving();
 }
 
@@ -178,26 +178,26 @@ void Finish(Module& m)
         s.name = "obj" + std::to_string(i + 1);
         s.va_start = o.va_start;
         s.va_end = o.va_start + (o.size - 1);
-        s.basis_linear = o.linear - o.va_start;
+        s.base_linear = o.linear - o.va_start;
         segments.push_back(s);
     }
     const std::string name = m.name; // SetSegments looks the module up again
     bool applied = false;
     Error error;
-    if (!SetSegments(name, segments, Herkunft::Abgeleitet, &applied, &error)) {
+    if (!SetSegments(name, segments, Origin::Derived, &applied, &error)) {
         GiveUp(m, error.message);
         return;
     }
-    m.le.zuordnung = "fertig";
+    m.le.assignment = "done";
     if (!applied)
-        m.le.hinweis = "a stronger mapping (symbol file or set_segments) has priority";
+        m.le.hint = "a stronger mapping (symbol file or set_segments) has priority";
     StopObserving();
 }
 
 void OnAllocation(uint32_t size, uint32_t linear)
 {
     Module* m = FindModule(g_pending);
-    if (m == nullptr || m->le.zuordnung != "offen") {
+    if (m == nullptr || m->le.assignment != "open") {
         StopObserving(); // module gone or recreated (modules.clear)
         return;
     }
@@ -261,7 +261,7 @@ void LeOnExit(uint16_t psp)
     if (g_pending.empty())
         return;
     Module* m = FindModule(g_pending);
-    if (m == nullptr || m->le.zuordnung != "offen") {
+    if (m == nullptr || m->le.assignment != "open") {
         StopObserving(); // module gone or recreated (modules.clear)
         return;
     }
@@ -285,7 +285,7 @@ void LeOnExec(const char* raw_name, const std::string& module_name, uint16_t fla
         return;
     m->le = LeInfo();
     // a new run resets the derivation: drop mappings of the previous run (stronger ones stay)
-    if (!m->segments.empty() && m->segments.front().herkunft == Herkunft::Abgeleitet)
+    if (!m->segments.empty() && m->segments.front().origin == Origin::Derived)
         m->segments.clear();
     const uint16_t saved_error = dos.errorcode;
     {
@@ -294,7 +294,7 @@ void LeOnExec(const char* raw_name, const std::string& module_name, uint16_t fla
             ParseLe(file, &m->le);
     }
     dos.errorcode = saved_error; // the guest must not see an error code from our read
-    if (m->le.zuordnung == "offen") {
+    if (m->le.assignment == "open") {
         g_pending = module_name;
         g_int = PendingInt();
         g_allocations = 0;
@@ -311,21 +311,21 @@ JsonValue LeJson(const LeInfo& le)
         JsonValue e = JsonValue::Object();
         Set(&e, "nr", Num(i + 1));
         Set(&e, "va_start", Hex(obj.va_start, 8));
-        Set(&e, "groesse", Hex(obj.size, 8));
+        Set(&e, "size", Hex(obj.size, 8));
         if (obj.assigned)
-            Set(&e, "basis_linear", Hex(obj.linear - obj.va_start, 8));
+            Set(&e, "base_linear", Hex(obj.linear - obj.va_start, 8));
         objects.array.push_back(e);
     }
-    Set(&o, "objekte", objects);
-    Set(&o, "zuordnung", Str(le.zuordnung));
+    Set(&o, "objects", objects);
+    Set(&o, "assignment", Str(le.assignment));
     if (!le.objects.empty()) {
         const LeObject& entry = le.objects[le.eip_object];
-        Set(&o, "einsprung_va", Hex(entry.va_start + le.eip, 8));
-        if (le.zuordnung == "fertig")
-            Set(&o, "einsprung_linear", Hex(entry.linear + le.eip, 8));
+        Set(&o, "entry_va", Hex(entry.va_start + le.eip, 8));
+        if (le.assignment == "done")
+            Set(&o, "entry_linear", Hex(entry.linear + le.eip, 8));
     }
-    if (!le.hinweis.empty())
-        Set(&o, "hinweis", Str(le.hinweis));
+    if (!le.hint.empty())
+        Set(&o, "hint", Str(le.hint));
     return o;
 }
 

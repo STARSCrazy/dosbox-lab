@@ -28,7 +28,7 @@ void StopCalls(bool limit);
 
 struct Range {
     uint32_t from = 0, to = 0; // inclusive
-    Address von, bis;
+    Address from_addr, to_addr;
 };
 
 struct IntRule {
@@ -38,16 +38,16 @@ struct IntRule {
 
 struct Config {
     std::string name = "calls";
-    std::vector<Address> ziele;
-    std::set<uint32_t> ziel_set;
-    std::vector<Range> bereiche;
+    std::vector<Address> targets;
+    std::set<uint32_t> target_set;
+    std::vector<Range> ranges;
     std::vector<std::string> module;
     std::vector<IntRule> ints;
     int stack_bytes = -1; // -1 = 32 (16-bit target) / 64 (32-bit target)
-    uint64_t max_je_ziel = 1000;
+    uint64_t max_per_target = 1000;
     uint64_t max_bytes = 256ull << 20;
-    uint64_t zustaende = 0;      // D31: savestate at the entry of the first N recorded calls per target
-    uint64_t max_zustaende = 1000;
+    uint64_t states = 0;      // D31: savestate at the entry of the first N recorded calls per target
+    uint64_t max_states = 1000;
 };
 
 struct Frame {
@@ -61,8 +61,8 @@ struct Frame {
 };
 
 struct Context {
-    std::string name;      // "haupt", "irq 08", "exception 0E"
-    uint16_t ret_sel = 0;  // where the interrupt returns to (not used for "haupt")
+    std::string name;      // "main", "irq 08", "exception 0E"
+    uint16_t ret_sel = 0;  // where the interrupt returns to (not used for "main")
     uint32_t ret_off = 0;
     uint16_t ss = 0;
     uint32_t sp_after = 0;
@@ -70,7 +70,7 @@ struct Context {
 };
 
 const size_t kMaxFrames = 4096;
-const size_t kMaxContexts = 64; // including the base context "haupt"
+const size_t kMaxContexts = 64; // including the base context "main"
 
 bool g_active = false;
 bool g_limit_hit = false;
@@ -86,7 +86,7 @@ std::vector<Context> g_contexts;
 std::map<uint32_t, uint64_t> g_per_target;          // recorded entries per target linear
 std::map<uint32_t, std::pair<CodePoint, uint64_t>> g_omitted; // target linear -> (point, count)
 uint64_t g_states_written = 0;
-uint64_t g_states_dropped = 0; // over max_zustaende
+uint64_t g_states_dropped = 0; // over max_states
 
 bool PlainName(const std::string& name)
 {
@@ -106,37 +106,37 @@ bool ParseConfig(const JsonValue& params, Config* cfg, Error* error)
 {
     if (Param(params, "name") != nullptr && (!ParamStr(params, "name", &cfg->name) || !PlainName(cfg->name)))
         return Fail(error, "bad_argument", "name must be a plain file name without path characters");
-    if (const JsonValue* list = Param(params, "ziele")) {
+    if (const JsonValue* list = Param(params, "targets")) {
         if (list->type != JsonType::Array)
-            return Fail(error, "bad_argument", "ziele must be a list of addresses");
+            return Fail(error, "bad_argument", "targets must be a list of addresses");
         for (const JsonValue& item : list->array) {
             Address a;
             if (item.type != JsonType::String)
-                return Fail(error, "bad_argument", "ziele entries must be address strings");
+                return Fail(error, "bad_argument", "targets entries must be address strings");
             if (!LinearOf(item.text, &a, error))
                 return false;
-            cfg->ziele.push_back(a);
-            cfg->ziel_set.insert(a.linear);
+            cfg->targets.push_back(a);
+            cfg->target_set.insert(a.linear);
         }
     }
-    if (const JsonValue* list = Param(params, "bereiche")) {
+    if (const JsonValue* list = Param(params, "ranges")) {
         if (list->type != JsonType::Array)
-            return Fail(error, "bad_argument", "bereiche must be a list of {von, bis}");
+            return Fail(error, "bad_argument", "ranges must be a list of {from, to}");
         for (const JsonValue& item : list->array) {
-            std::string von, bis;
-            if (item.type != JsonType::Object || !ParamStr(item, "von", &von) || !ParamStr(item, "bis", &bis))
-                return Fail(error, "bad_argument", "bereiche entries need von and bis (address strings)");
+            std::string from_text, to_text;
+            if (item.type != JsonType::Object || !ParamStr(item, "from", &from_text) || !ParamStr(item, "to", &to_text))
+                return Fail(error, "bad_argument", "ranges entries need from and to (address strings)");
             Range r;
-            if (!LinearOf(von, &r.von, error) || !LinearOf(bis, &r.bis, error))
+            if (!LinearOf(from_text, &r.from_addr, error) || !LinearOf(to_text, &r.to_addr, error))
                 return false;
-            r.from = r.von.linear;
-            r.to = r.bis.linear;
+            r.from = r.from_addr.linear;
+            r.to = r.to_addr.linear;
             if (r.to < r.from)
-                return Fail(error, "bad_argument", "bereich bis lies before von");
-            cfg->bereiche.push_back(r);
+                return Fail(error, "bad_argument", "range to lies before from");
+            cfg->ranges.push_back(r);
         }
     }
-    if (const JsonValue* list = Param(params, "module")) {
+    if (const JsonValue* list = Param(params, "modules")) {
         if (list->type != JsonType::Array)
             return Fail(error, "bad_argument", "module must be a list of module names");
         for (const JsonValue& item : list->array) {
@@ -148,24 +148,24 @@ bool ParseConfig(const JsonValue& params, Config* cfg, Error* error)
             bool any = false;
             for (const ModuleSegment& s : m->segments) {
                 Range r;
-                r.from = s.basis_linear + s.va_start;
-                r.to = s.basis_linear + s.va_end;
-                r.von.modus = r.bis.modus = "linear";
-                r.von.has_linear = r.bis.has_linear = true;
-                r.von.linear = r.from;
-                r.bis.linear = r.to;
-                cfg->bereiche.push_back(r);
+                r.from = s.base_linear + s.va_start;
+                r.to = s.base_linear + s.va_end;
+                r.from_addr.mode = r.to_addr.mode = "linear";
+                r.from_addr.has_linear = r.to_addr.has_linear = true;
+                r.from_addr.linear = r.from;
+                r.to_addr.linear = r.to;
+                cfg->ranges.push_back(r);
                 any = true;
             }
-            if (!any && m->has_load && m->art != "overlay" && m->paragraphs != 0) {
+            if (!any && m->has_load && m->kind != "overlay" && m->paragraphs != 0) {
                 Range r;
                 r.from = static_cast<uint32_t>(m->psp) << 4;
                 r.to = ((static_cast<uint32_t>(m->psp) + m->paragraphs) << 4) - 1;
-                r.von.modus = r.bis.modus = "linear";
-                r.von.has_linear = r.bis.has_linear = true;
-                r.von.linear = r.from;
-                r.bis.linear = r.to;
-                cfg->bereiche.push_back(r);
+                r.from_addr.mode = r.to_addr.mode = "linear";
+                r.from_addr.has_linear = r.to_addr.has_linear = true;
+                r.from_addr.linear = r.from;
+                r.to_addr.linear = r.to;
+                cfg->ranges.push_back(r);
                 any = true;
             }
             if (!any)
@@ -175,12 +175,12 @@ bool ParseConfig(const JsonValue& params, Config* cfg, Error* error)
     }
     if (const JsonValue* list = Param(params, "ints")) {
         if (list->type != JsonType::Array)
-            return Fail(error, "bad_argument", "ints must be a list of {nummer, ah?}");
+            return Fail(error, "bad_argument", "ints must be a list of {number, ah?}");
         for (const JsonValue& entry : list->array) {
             IntRule rule;
             uint32_t value = 0;
-            if (entry.type != JsonType::Object || !HexField(entry, "nummer", &value) || value > 0xFF)
-                return Fail(error, "bad_argument", "ints entries need nummer (hex string, 00-FF)");
+            if (entry.type != JsonType::Object || !HexField(entry, "number", &value) || value > 0xFF)
+                return Fail(error, "bad_argument", "ints entries need number (hex string, 00-FF)");
             rule.num = static_cast<uint8_t>(value);
             if (Param(entry, "ah") != nullptr) {
                 if (!HexField(entry, "ah", &value) || value > 0xFF)
@@ -190,25 +190,25 @@ bool ParseConfig(const JsonValue& params, Config* cfg, Error* error)
             cfg->ints.push_back(rule);
         }
     }
-    if (cfg->ziele.empty() && cfg->bereiche.empty() && cfg->ints.empty())
-        return Fail(error, "bad_argument", "calls.start needs ziele, bereiche, module or ints");
+    if (cfg->targets.empty() && cfg->ranges.empty() && cfg->ints.empty())
+        return Fail(error, "bad_argument", "calls.start needs targets, ranges, module or ints");
     uint64_t value = 0;
     if (Param(params, "stack_bytes") != nullptr) {
         if (!ParamU64(params, "stack_bytes", &value) || value > 1024)
             return Fail(error, "bad_argument", "stack_bytes must be between 0 and 1024");
         cfg->stack_bytes = static_cast<int>(value);
     }
-    if (Param(params, "max_je_ziel") != nullptr &&
-        (!ParamU64(params, "max_je_ziel", &cfg->max_je_ziel) || cfg->max_je_ziel == 0))
-        return Fail(error, "bad_argument", "max_je_ziel must be at least 1");
+    if (Param(params, "max_per_target") != nullptr &&
+        (!ParamU64(params, "max_per_target", &cfg->max_per_target) || cfg->max_per_target == 0))
+        return Fail(error, "bad_argument", "max_per_target must be at least 1");
     if (Param(params, "max_bytes") != nullptr && (!ParamU64(params, "max_bytes", &cfg->max_bytes) ||
                                                   cfg->max_bytes < 4096))
         return Fail(error, "bad_argument", "max_bytes must be at least 4096");
-    if (Param(params, "zustaende") != nullptr && !ParamU64(params, "zustaende", &cfg->zustaende))
-        return Fail(error, "bad_argument", "zustaende must be a number >= 0");
-    if (Param(params, "max_zustaende") != nullptr &&
-        (!ParamU64(params, "max_zustaende", &cfg->max_zustaende) || cfg->max_zustaende == 0))
-        return Fail(error, "bad_argument", "max_zustaende must be at least 1");
+    if (Param(params, "states") != nullptr && !ParamU64(params, "states", &cfg->states))
+        return Fail(error, "bad_argument", "states must be a number >= 0");
+    if (Param(params, "max_states") != nullptr &&
+        (!ParamU64(params, "max_states", &cfg->max_states) || cfg->max_states == 0))
+        return Fail(error, "bad_argument", "max_states must be at least 1");
     return true;
 }
 
@@ -231,41 +231,41 @@ uint64_t OmittedTotal()
 JsonValue StatusJson()
 {
     JsonValue r = JsonValue::Object();
-    Set(&r, "aktiv", Bool(g_active));
-    Set(&r, "datei", Str(g_path));
-    Set(&r, "geschrieben", Num(g_written));
-    Set(&r, "offen", Num(OpenCount()));
-    Set(&r, "weggelassen", Num(OmittedTotal()));
+    Set(&r, "active", Bool(g_active));
+    Set(&r, "file", Str(g_path));
+    Set(&r, "written", Num(g_written));
+    Set(&r, "open", Num(OpenCount()));
+    Set(&r, "omitted", Num(OmittedTotal()));
     Set(&r, "bytes", Num(g_bytes));
-    Set(&r, "limit_erreicht", Bool(g_limit_hit));
-    Set(&r, "zustaende_geschrieben", Num(g_states_written));
-    Set(&r, "zustaende_weggelassen", Num(g_states_dropped));
+    Set(&r, "limit_reached_flag", Bool(g_limit_hit));
+    Set(&r, "states_written", Num(g_states_written));
+    Set(&r, "states_omitted", Num(g_states_dropped));
     return r;
 }
 
 JsonValue MetaJson()
 {
     JsonValue filter = JsonValue::Object();
-    JsonValue ziele = JsonValue::Array();
-    for (const Address& a : g_cfg.ziele)
-        ziele.array.push_back(AddressJson(a, true));
-    Set(&filter, "ziele", ziele);
-    JsonValue bereiche = JsonValue::Array();
-    for (const Range& r : g_cfg.bereiche) {
+    JsonValue targets = JsonValue::Array();
+    for (const Address& a : g_cfg.targets)
+        targets.array.push_back(AddressJson(a, true));
+    Set(&filter, "targets", targets);
+    JsonValue ranges = JsonValue::Array();
+    for (const Range& r : g_cfg.ranges) {
         JsonValue o = JsonValue::Object();
-        Set(&o, "von", AddressJson(r.von, true));
-        Set(&o, "bis", AddressJson(r.bis, true));
-        bereiche.array.push_back(o);
+        Set(&o, "from", AddressJson(r.from_addr, true));
+        Set(&o, "to", AddressJson(r.to_addr, true));
+        ranges.array.push_back(o);
     }
-    Set(&filter, "bereiche", bereiche);
+    Set(&filter, "ranges", ranges);
     JsonValue module = JsonValue::Array();
     for (const std::string& m : g_cfg.module)
         module.array.push_back(Str(m));
-    Set(&filter, "module", module);
+    Set(&filter, "modules", module);
     JsonValue ints = JsonValue::Array();
     for (const IntRule& rule : g_cfg.ints) {
         JsonValue o = JsonValue::Object();
-        Set(&o, "nummer", HexOut(rule.num, 2, true));
+        Set(&o, "number", HexOut(rule.num, 2, true));
         if (rule.ah >= 0)
             Set(&o, "ah", HexOut(static_cast<uint64_t>(rule.ah), 2, true));
         ints.array.push_back(o);
@@ -273,29 +273,29 @@ JsonValue MetaJson()
     Set(&filter, "ints", ints);
     JsonValue meta = JsonValue::Object();
     Set(&meta, "format", Str("dosbox-lab-calls/1"));
-    Set(&meta, "datei", Str(g_cfg.name + ".jsonl"));
+    Set(&meta, "file", Str(g_cfg.name + ".jsonl"));
     Set(&meta, "filter", filter);
     JsonValue stack_bytes;
     if (g_cfg.stack_bytes >= 0)
         stack_bytes = Num(static_cast<uint64_t>(g_cfg.stack_bytes));
     Set(&meta, "stack_bytes", stack_bytes); // default JsonValue is null
-    Set(&meta, "max_je_ziel", Num(g_cfg.max_je_ziel));
-    Set(&meta, "geschrieben", Num(g_written));
-    Set(&meta, "offen", Num(OpenCount()));
-    Set(&meta, "befehle", Num(g_insn));
-    Set(&meta, "limit_erreicht", Bool(g_limit_hit));
-    Set(&meta, "zustaende", Num(g_cfg.zustaende));
-    Set(&meta, "max_zustaende", Num(g_cfg.max_zustaende));
-    Set(&meta, "zustaende_geschrieben", Num(g_states_written));
-    Set(&meta, "zustaende_weggelassen", Num(g_states_dropped));
+    Set(&meta, "max_per_target", Num(g_cfg.max_per_target));
+    Set(&meta, "written", Num(g_written));
+    Set(&meta, "open", Num(OpenCount()));
+    Set(&meta, "instructions", Num(g_insn));
+    Set(&meta, "limit_reached_flag", Bool(g_limit_hit));
+    Set(&meta, "states", Num(g_cfg.states));
+    Set(&meta, "max_states", Num(g_cfg.max_states));
+    Set(&meta, "states_written", Num(g_states_written));
+    Set(&meta, "states_omitted", Num(g_states_dropped));
     JsonValue omitted = JsonValue::Array();
     for (const auto& e : g_omitted) {
         JsonValue o = JsonValue::Object();
-        Set(&o, "ziel", AddressJson(CodePointAddress(e.second.first), true));
-        Set(&o, "anzahl", Num(e.second.second));
+        Set(&o, "target", AddressJson(CodePointAddress(e.second.first), true));
+        Set(&o, "count", Num(e.second.second));
         omitted.array.push_back(o);
     }
-    Set(&meta, "weggelassen", omitted);
+    Set(&meta, "omitted", omitted);
     return meta;
 }
 
@@ -393,22 +393,22 @@ bool WriteLine(const JsonValue& line)
     return true;
 }
 
-void WriteClosed(Frame& f, const char* ende, bool with_exit)
+void WriteClosed(Frame& f, const char* end, bool with_exit)
 {
     JsonValue line = f.entry;
-    Set(&line, "nr_ende", Num(g_insn));
+    Set(&line, "nr_end", Num(g_insn));
     if (with_exit) {
-        Set(&line, "regs_aus", RegsJson());
-        Set(&line, "flags_aus", FlagsJson());
+        Set(&line, "regs_out", RegsJson());
+        Set(&line, "flags_out", FlagsJson());
     }
-    Set(&line, "ende", Str(ende));
+    Set(&line, "end", Str(end));
     WriteLine(line);
 }
 
 void WriteOpen(const Frame& f)
 {
     JsonValue line = f.entry;
-    Set(&line, "offen", Bool(true));
+    Set(&line, "open", Bool(true));
     WriteLine(line);
 }
 
@@ -416,7 +416,7 @@ void WriteOpen(const Frame& f)
 void DropFrom(Context& c, size_t from)
 {
     while (c.frames.size() > from) {
-        WriteClosed(c.frames.back(), "unbekannt", false);
+        WriteClosed(c.frames.back(), "unknown", false);
         if (!g_active)
             return;
         c.frames.pop_back();
@@ -437,9 +437,9 @@ bool Wanted(const Transfer& t)
                 return true;
         return false;
     }
-    if (g_cfg.ziel_set.count(t.dst.linear) != 0)
+    if (g_cfg.target_set.count(t.dst.linear) != 0)
         return true;
-    for (const Range& r : g_cfg.bereiche)
+    for (const Range& r : g_cfg.ranges)
         if (t.dst.linear >= r.from && t.dst.linear <= r.to)
             return true;
     return false;
@@ -482,32 +482,32 @@ void ReturnPoint(const Transfer& t, uint16_t* sel, uint32_t* off, uint16_t* fram
 // D31: savestate at the first instruction of the target (before it executes); the sidecar names the return.
 void SaveEntryState(Frame& f, const Transfer& t, int bits)
 {
-    if (g_states_written >= g_cfg.max_zustaende) {
+    if (g_states_written >= g_cfg.max_states) {
         ++g_states_dropped;
         return;
     }
-    JsonValue aufruf = JsonValue::Object();
-    Set(&aufruf, "call_id", Num(f.id));
-    Set(&aufruf, "calls_datei", Str(g_cfg.name + ".jsonl"));
-    Set(&aufruf, "art", Str(t.kind == TransferKind::CallNear ? "near" : (t.kind == TransferKind::CallFar ? "far" : "int")));
-    Set(&aufruf, "bits", Num(static_cast<uint64_t>(bits)));
-    Set(&aufruf, "ziel", AddressJson(CodePointAddress(t.dst), true));
+    JsonValue call = JsonValue::Object();
+    Set(&call, "call_id", Num(f.id));
+    Set(&call, "calls_file", Str(g_cfg.name + ".jsonl"));
+    Set(&call, "kind", Str(t.kind == TransferKind::CallNear ? "near" : (t.kind == TransferKind::CallFar ? "far" : "int")));
+    Set(&call, "bits", Num(static_cast<uint64_t>(bits)));
+    Set(&call, "target", AddressJson(CodePointAddress(t.dst), true));
     JsonValue ret = JsonValue::Object();
     Set(&ret, "sel", HexOut(f.ret_sel, 4, true));
     Set(&ret, "off", HexOut(f.ret_off, 8, true));
-    Set(&aufruf, "ruecksprung", ret);
-    Set(&aufruf, "ss", HexOut(f.ss, 4, true));
-    Set(&aufruf, "esp_ein", HexOut(CurrentSp(), 8, true));
-    Set(&aufruf, "esp_nach", HexOut(f.sp_after, 8, true));
-    Set(&aufruf, "modus", Str(t.dst.modus == 2 ? "pm" : (t.dst.modus == 1 ? "v86" : "real")));
+    Set(&call, "return_address", ret);
+    Set(&call, "ss", HexOut(f.ss, 4, true));
+    Set(&call, "esp_in", HexOut(CurrentSp(), 8, true));
+    Set(&call, "esp_after", HexOut(f.sp_after, 8, true));
+    Set(&call, "mode", Str(t.dst.mode == 2 ? "pm" : (t.dst.mode == 1 ? "v86" : "real")));
     std::string path, info;
     uint64_t size = 0;
     Error err;
-    if (SaveStateFile(g_cfg.name + "_" + std::to_string(f.id), &aufruf, &path, &info, &size, &err)) {
-        Set(&f.entry, "zustand", Str(path));
+    if (SaveStateFile(g_cfg.name + "_" + std::to_string(f.id), &call, &path, &info, &size, &err)) {
+        Set(&f.entry, "state", Str(path));
         ++g_states_written;
     } else {
-        Set(&f.entry, "zustand_fehler", Str(err.message));
+        Set(&f.entry, "state_error", Str(err.message));
     }
 }
 
@@ -518,7 +518,7 @@ void OnEntry(const Transfer& t)
     uint64_t nth = 0; // number of this recorded call of the target (1 = first)
     {
         uint64_t& count = g_per_target[key]; // the limit applies to every kind, INT keyed by its handler
-        if (count >= g_cfg.max_je_ziel) {
+        if (count >= g_cfg.max_per_target) {
             auto& o = g_omitted[key];
             o.first = t.dst;
             ++o.second;
@@ -527,7 +527,7 @@ void OnEntry(const Transfer& t)
         nth = ++count;
     }
     if (c.frames.size() >= kMaxFrames) {
-        WriteClosed(c.frames.front(), "unbekannt", false);
+        WriteClosed(c.frames.front(), "unknown", false);
         if (!g_active)
             return; // size limit: StopCalls cleared the contexts
         c.frames.erase(c.frames.begin());
@@ -546,26 +546,26 @@ void OnEntry(const Transfer& t)
         Set(&e, "parent_id", JsonValue()); // null
     else
         Set(&e, "parent_id", Num(c.frames.back().id));
-    Set(&e, "tiefe", Num(c.frames.size()));
-    Set(&e, "kontext", Str(c.name));
+    Set(&e, "depth", Num(c.frames.size()));
+    Set(&e, "context", Str(c.name));
     Set(&e, "nr", Num(g_insn));
-    Set(&e, "von", AddressJson(CodePointAddress(t.src), true));
-    Set(&e, "ziel", AddressJson(CodePointAddress(t.dst), true));
-    Set(&e, "art", Str(t.kind == TransferKind::CallNear ? "near" : (t.kind == TransferKind::CallFar ? "far" : "int")));
+    Set(&e, "from", AddressJson(CodePointAddress(t.src), true));
+    Set(&e, "target", AddressJson(CodePointAddress(t.dst), true));
+    Set(&e, "kind", Str(t.kind == TransferKind::CallNear ? "near" : (t.kind == TransferKind::CallFar ? "far" : "int")));
     if (t.kind == TransferKind::Int)
-        Set(&e, "vektor", HexOut(t.vector, 2, true));
+        Set(&e, "vector", HexOut(t.vector, 2, true));
     Set(&e, "bits", Num(static_cast<uint64_t>(bits)));
-    Set(&e, "regs_ein", RegsJson());
-    Set(&e, "flags_ein", FlagsJson());
+    Set(&e, "regs_in", RegsJson());
+    Set(&e, "flags_in", FlagsJson());
     Set(&e, "stack", Str(HexBytes(stack.data(), got)));
-    Set(&e, "stack_laenge", Num(got));
+    Set(&e, "stack_length", Num(got));
     f.entry = e;
-    if (g_cfg.zustaende != 0 && nth <= g_cfg.zustaende)
+    if (g_cfg.states != 0 && nth <= g_cfg.states)
         SaveEntryState(f, t, bits);
     c.frames.push_back(f);
 }
 
-// Context i (not the base) and all contexts above it end: their frames are written as "unbekannt".
+// Context i (not the base) and all contexts above it end: their frames are written as "unknown".
 void DropContextsFrom(size_t i)
 {
     while (g_contexts.size() > i) {
@@ -629,7 +629,7 @@ void WriteOpenFrames()
             WriteOpen(g_contexts[i].frames[j]);
 }
 
-// Finishes the recording: open frames as "offen" (not after a size limit: the file is full), side file, close.
+// Finishes the recording: open frames as "open" (not after a size limit: the file is full), side file, close.
 void StopCalls(bool limit)
 {
     if (!g_active)
@@ -669,7 +669,7 @@ void CallsOnExit(uint16_t psp)
     Context& c = g_contexts.front();
     for (size_t i = 0; i < c.frames.size(); ++i) {
         const Frame& f = c.frames[i];
-        const bool pm = f.target.modus == 2;
+        const bool pm = f.target.mode == 2;
         const bool own = f.ret_sel >= psp && f.ret_sel < psp + paragraphs;
         if (pm || own) {
             DropFrom(c, i);
@@ -678,7 +678,7 @@ void CallsOnExit(uint16_t psp)
     }
 }
 
-// The loaded state replaces the call stack: every open frame ends as "unbekannt".
+// The loaded state replaces the call stack: every open frame ends as "unknown".
 void CallsOnStateLoad()
 {
     if (!g_active || g_contexts.empty())
@@ -740,9 +740,9 @@ void RegisterCalls()
         g_states_written = 0;
         g_states_dropped = 0;
         g_contexts.clear();
-        Context haupt;
-        haupt.name = "haupt";
-        g_contexts.push_back(haupt);
+        Context main;
+        main.name = "main";
+        g_contexts.push_back(main);
         FlowResetIfIdle(); // drop a transfer left pending by an earlier run (no consumer active right now)
         g_active = true;
         UpdateHookActive();
@@ -750,11 +750,11 @@ void RegisterCalls()
         return true;
     });
     Register("calls.stop", [](const JsonValue&, JsonValue* result, Error*) {
-        const uint64_t offen = OpenCount();
+        const uint64_t open = OpenCount();
         StopCalls(false);
         *result = StatusJson();
-        Set(result, "json_pfad", Str(g_json_path));
-        Set(result, "offen", Num(offen));
+        Set(result, "json_path", Str(g_json_path));
+        Set(result, "open", Num(open));
         return true;
     });
     Register("calls.status", [](const JsonValue&, JsonValue* result, Error*) {

@@ -66,38 +66,38 @@ void RegisterDos()
     Register("dos.mcb", [](const JsonValue&, JsonValue* result, Error*) {
         JsonValue list = JsonValue::Array();
         uint16_t seg = dos.firstMCB;
-        std::string ende = "abgebrochen";
+        std::string end = "aborted";
         for (int n = 0; n < 4096; ++n) {
             const uint32_t lin = static_cast<uint32_t>(seg) << 4;
             if (!PhysInRam(lin, 16)) {
-                ende = "ausserhalb";
+                end = "outside";
                 break;
             }
-            const uint8_t typ = phys_readb(static_cast<PhysPt>(lin));
-            if (typ != 'M' && typ != 'Z') {
-                ende = "kaputt";
+            const uint8_t type = phys_readb(static_cast<PhysPt>(lin));
+            if (type != 'M' && type != 'Z') {
+                end = "broken";
                 break;
             }
             const uint16_t owner = phys_readw(static_cast<PhysPt>(lin + 1));
             const uint16_t size = phys_readw(static_cast<PhysPt>(lin + 3));
             JsonValue block = JsonValue::Object();
             Set(&block, "seg", Hex(seg, 4));
-            Set(&block, "typ", Str(std::string(1, static_cast<char>(typ))));
-            Set(&block, "besitzer", Hex(owner, 4));
-            Set(&block, "paragraphen", Num(size));
-            Set(&block, "groesse", Num(static_cast<uint64_t>(size) * 16));
+            Set(&block, "type", Str(std::string(1, static_cast<char>(type))));
+            Set(&block, "owner", Hex(owner, 4));
+            Set(&block, "paragraphs", Num(size));
+            Set(&block, "size", Num(static_cast<uint64_t>(size) * 16));
             Set(&block, "name", Str(Name8(lin + 8)));
-            Set(&block, "frei", Bool(owner == 0));
-            Set(&block, "programm", Bool(owner == static_cast<uint16_t>(seg + 1)));
+            Set(&block, "free", Bool(owner == 0));
+            Set(&block, "program", Bool(owner == static_cast<uint16_t>(seg + 1)));
             list.array.push_back(block);
-            if (typ == 'Z') {
-                ende = "Z";
+            if (type == 'Z') {
+                end = "Z";
                 break;
             }
             seg = static_cast<uint16_t>(seg + size + 1);
         }
-        Set(result, "bloecke", list);
-        Set(result, "ende", Str(ende));
+        Set(result, "blocks", list);
+        Set(result, "end", Str(end));
         return true;
     });
     Register("dos.programs", [](const JsonValue&, JsonValue* result, Error*) {
@@ -112,19 +112,19 @@ void RegisterDos()
             const uint16_t parent = phys_readw(static_cast<PhysPt>(base + 0x16));
             JsonValue entry = JsonValue::Object();
             Set(&entry, "psp", Hex(psp, 4));
-            Set(&entry, "eltern", Hex(parent, 4));
-            Set(&entry, "umgebung", Hex(phys_readw(static_cast<PhysPt>(base + 0x2C)), 4));
+            Set(&entry, "parent", Hex(parent, 4));
+            Set(&entry, "environment", Hex(phys_readw(static_cast<PhysPt>(base + 0x2C)), 4));
             const uint32_t mcb = base - 16;
             const bool own_mcb = phys_readw(static_cast<PhysPt>(mcb + 1)) == psp;
             Set(&entry, "name", Str(own_mcb ? Name8(mcb + 8) : std::string()));
-            Set(&entry, "befehlszeile", Str(Tail(psp)));
-            Set(&entry, "aktuell", Bool(first));
+            Set(&entry, "command_line", Str(Tail(psp)));
+            Set(&entry, "current", Bool(first));
             for (const Module& m : Modules()) {
-                if (m.has_load && m.psp == psp && m.art != "overlay") {
-                    Set(&entry, "modul", Str(m.name));
-                    Set(&entry, "datei", Str(m.datei));
+                if (m.has_load && m.psp == psp && m.kind != "overlay") {
+                    Set(&entry, "module", Str(m.name));
+                    Set(&entry, "file", Str(m.file));
                     Set(&entry, "load_seg", Hex(m.load_seg, 4));
-                    Set(&entry, "rel_basis", Hex(m.rel_basis, 4));
+                    Set(&entry, "rel_base", Hex(m.rel_base, 4));
                 }
             }
             list.array.push_back(entry);
@@ -133,7 +133,7 @@ void RegisterDos()
                 break; // the shell is its own parent
             psp = parent;
         }
-        Set(result, "programme", list);
+        Set(result, "programs", list);
         return true;
     });
     Register("dos.files", [](const JsonValue&, JsonValue* result, Error*) {
@@ -144,23 +144,23 @@ void RegisterDos()
             JsonValue entry = JsonValue::Object();
             Set(&entry, "sft", Num(i));
             Set(&entry, "name", Str(PrintableName(Files[i]->GetName())));
-            Set(&entry, "referenzen", Num(static_cast<uint64_t>(Files[i]->refCtr)));
+            Set(&entry, "refs", Num(static_cast<uint64_t>(Files[i]->refCtr)));
             files.array.push_back(entry);
         }
         JsonValue handles = JsonValue::Array();
         const uint32_t psp_lin = static_cast<uint32_t>(dos.psp()) << 4;
         if (!PhysInRam(psp_lin, 0x100)) {
-            Set(result, "jft_fehler", Str("PSP not in RAM"));
+            Set(result, "jft_error", Str("PSP not in RAM"));
         } else {
             const uint16_t count = phys_readw(static_cast<PhysPt>(psp_lin + 0x32));
             const uint32_t ptr = phys_readd(static_cast<PhysPt>(psp_lin + 0x34));
             const uint32_t jft = ((ptr >> 16) << 4) + (ptr & 0xFFFFu);
             if (!PhysInRam(jft, count == 0 ? 1 : count)) {
-                Set(result, "jft_fehler", Str("job file table outside RAM"));
+                Set(result, "jft_error", Str("job file table outside RAM"));
             } else {
                 const uint16_t n = count > 255 ? 255 : count;
                 if (count > 255)
-                    Set(result, "abgeschnitten", Bool(true));
+                    Set(result, "truncated", Bool(true));
                 for (uint16_t h = 0; h < n; ++h) {
                     const uint8_t sft = phys_readb(static_cast<PhysPt>(jft + h));
                     if (sft == 0xFF)
@@ -172,29 +172,29 @@ void RegisterDos()
                 }
             }
         }
-        Set(result, "dateien", files);
+        Set(result, "files", files);
         Set(result, "handles", handles);
         return true;
     });
     Register("dos.target", [](const JsonValue&, JsonValue* result, Error*) {
         const Module* m = TargetModule();
-        Set(result, "gefunden", Bool(m != nullptr));
+        Set(result, "found", Bool(m != nullptr));
         if (m == nullptr)
             return true;
-        Set(result, "modul", Str(m->name));
-        Set(result, "datei", Str(m->datei));
-        Set(result, "art", Str(m->art));
+        Set(result, "module", Str(m->name));
+        Set(result, "file", Str(m->file));
+        Set(result, "kind", Str(m->kind));
         Set(result, "psp", Hex(m->psp, 4));
         Set(result, "load_seg", Hex(m->load_seg, 4));
-        Set(result, "rel_basis", Hex(m->rel_basis, 4));
-        Set(result, "relocation", Hex(m->art == "com" ? 0 : m->load_seg, 4));
-        Set(result, "paragraphen", Num(m->paragraphs));
+        Set(result, "rel_base", Hex(m->rel_base, 4));
+        Set(result, "relocation", Hex(m->kind == "com" ? 0 : m->load_seg, 4));
+        Set(result, "paragraphs", Num(m->paragraphs));
         if (m->has_entry) {
-            Set(result, "einsprung", Str(SegOffText(m->csip)));
+            Set(result, "entry", Str(SegOffText(m->csip)));
             Set(result, "stack", Str(SegOffText(m->sssp)));
         }
-        Set(result, "befehlszeile", Str(m->befehlszeile));
-        Set(result, "exec_anzahl", Num(m->exec_count));
+        Set(result, "command_line", Str(m->command_line));
+        Set(result, "exec_count", Num(m->exec_count));
         return true;
     });
 }

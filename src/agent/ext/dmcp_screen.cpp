@@ -168,10 +168,10 @@ void RegisterScreen()
         const unsigned fy = Factor(g_frame.text_mode, g_frame.height, g_frame.game_height);
         const unsigned gw = g_frame.width / fx, gh = g_frame.height / fy;
         uint64_t x = 0, y = 0, w = gw, h = gh;
-        const bool has_rect = Param(params, "breite") != nullptr;
+        const bool has_rect = Param(params, "width") != nullptr;
         if (has_rect && (!ParamU64(params, "x", &x) || !ParamU64(params, "y", &y) ||
-                         !ParamU64(params, "breite", &w) || !ParamU64(params, "hoehe", &h)))
-            return Fail(error, "bad_argument", "rectangle needs x, y, breite, hoehe (non-negative integers)");
+                         !ParamU64(params, "width", &w) || !ParamU64(params, "height", &h)))
+            return Fail(error, "bad_argument", "rectangle needs x, y, width, height (non-negative integers)");
         if (w == 0 || h == 0 || x > gw || w > gw - x || y > gh || h > gh - y)
             return Fail(error, "bad_argument", "rectangle outside the " + std::to_string(gw) + "x" +
                         std::to_string(gh) + " screen");
@@ -191,18 +191,18 @@ void RegisterScreen()
         std::string path;
         if (!WriteOutputFile(name + ".png", png.data(), png.size(), &path, error))
             return false;
-        Set(result, "pfad", Str(path));
-        Set(result, "breite", Num(w));
-        Set(result, "hoehe", Num(h));
+        Set(result, "path", Str(path));
+        Set(result, "width", Num(w));
+        Set(result, "height", Num(h));
         JsonValue source = JsonValue::Object();
-        Set(&source, "breite", Num(g_frame.width));
-        Set(&source, "hoehe", Num(g_frame.height));
+        Set(&source, "width", Num(g_frame.width));
+        Set(&source, "height", Num(g_frame.height));
         Set(&source, "bpp", Num(g_frame.bpp));
-        Set(result, "quelle", source);
+        Set(result, "source", source);
         JsonValue factor = JsonValue::Object();
         Set(&factor, "x", Num(fx));
         Set(&factor, "y", Num(fy));
-        Set(result, "faktor", factor);
+        Set(result, "factor", factor);
         return true;
     });
     Register("screen.text", [](const JsonValue&, JsonValue* result, Error* error) {
@@ -226,23 +226,23 @@ void RegisterScreen()
                 line.pop_back();
             lines.array.push_back(Str(line));
         }
-        Set(result, "zeilen", lines);
-        Set(result, "spalten", Num(cols));
+        Set(result, "lines", lines);
+        Set(result, "columns", Num(cols));
         JsonValue cursor = JsonValue::Object();
-        Set(&cursor, "spalte", Num(real_readb(0x40, static_cast<uint16_t>(0x50 + page * 2))));
-        Set(&cursor, "zeile", Num(real_readb(0x40, static_cast<uint16_t>(0x51 + page * 2))));
+        Set(&cursor, "column", Num(real_readb(0x40, static_cast<uint16_t>(0x50 + page * 2))));
+        Set(&cursor, "line", Num(real_readb(0x40, static_cast<uint16_t>(0x51 + page * 2))));
         Set(result, "cursor", cursor);
-        Set(result, "modus", Hex(mode, 2));
+        Set(result, "mode", Hex(mode, 2));
         return true;
     });
     Register("screen.video_state", [](const JsonValue&, JsonValue* result, Error*) {
-        Set(result, "modus", Hex(CurMode != nullptr ? CurMode->mode : real_readb(0x40, 0x49), 2));
-        Set(result, "typ", Str(IsTextMode() ? "text" : "grafik"));
-        Set(result, "breite", Num(CurMode != nullptr ? CurMode->swidth : 0));
-        Set(result, "hoehe", Num(CurMode != nullptr ? CurMode->sheight : 0));
+        Set(result, "mode", Hex(CurMode != nullptr ? CurMode->mode : real_readb(0x40, 0x49), 2));
+        Set(result, "type", Str(IsTextMode() ? "text" : "graphics"));
+        Set(result, "width", Num(CurMode != nullptr ? CurMode->swidth : 0));
+        Set(result, "height", Num(CurMode != nullptr ? CurMode->sheight : 0));
         Set(result, "bpp", Num(render.src.bpp));
-        Set(result, "quelle_breite", Num(render.src.width));
-        Set(result, "quelle_hoehe", Num(render.src.height));
+        Set(result, "source_width", Num(render.src.width));
+        Set(result, "source_height", Num(render.src.height));
         return true;
     });
 }

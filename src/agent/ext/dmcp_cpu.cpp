@@ -69,7 +69,7 @@ JsonValue RegistersObject()
         const SegNames index = static_cast<SegNames>(i);
         JsonValue one = JsonValue::Object();
         Set(&one, "sel", Hex(SegValue(index), 4));
-        Set(&one, "basis", Hex(static_cast<uint32_t>(SegPhys(index)), 8));
+        Set(&one, "base", Hex(static_cast<uint32_t>(SegPhys(index)), 8));
         Set(&seg, kSegNames[i], one);
     }
     Set(&result, "seg", seg);
@@ -93,7 +93,7 @@ JsonValue RegistersObject()
     Set(&flags, "of", Bool(GETFLAG(OF) != 0));
     Set(&result, "flags", flags);
 
-    Set(&result, "modus", Str(ModeName()));
+    Set(&result, "mode", Str(ModeName()));
     Set(&result, "bits", Num(cpu.code.big ? 32 : 16));
     Set(&result, "cpl", Num(cpu.cpl));
     Set(&result, "paging", Bool((cpu.cr0 & 0x80000000u) != 0));
@@ -104,16 +104,16 @@ JsonValue SegmentDescriptorJson(uint32_t index, uint16_t selector, const Descrip
 {
     JsonValue entry = JsonValue::Object();
     Set(&entry, "index", Num(index));
-    Set(&entry, "selektor", Hex(selector, 4));
-    Set(&entry, "roh", Hex((static_cast<uint64_t>(desc.saved.fill[1]) << 32) | desc.saved.fill[0], 16));
+    Set(&entry, "selector", Hex(selector, 4));
+    Set(&entry, "raw", Hex((static_cast<uint64_t>(desc.saved.fill[1]) << 32) | desc.saved.fill[0], 16));
     const Bitu type = desc.Type();
-    Set(&entry, "typ", Hex(type, 2));
-    Set(&entry, "basis", Hex(static_cast<uint32_t>(desc.GetBase()), 8));
+    Set(&entry, "type", Hex(type, 2));
+    Set(&entry, "base", Hex(static_cast<uint32_t>(desc.GetBase()), 8));
     Set(&entry, "limit", Hex(static_cast<uint32_t>(desc.GetLimit()), 8));
     Set(&entry, "dpl", Num(desc.DPL()));
-    Set(&entry, "praesent", Bool(desc.saved.seg.p != 0));
+    Set(&entry, "present", Bool(desc.saved.seg.p != 0));
     Set(&entry, "bits", Num(desc.Big() ? 32 : 16));
-    Set(&entry, "art", Str((type & 0x10) == 0 ? "system" : ((type & 0x08) != 0 ? "code" : "daten")));
+    Set(&entry, "kind", Str((type & 0x10) == 0 ? "system" : ((type & 0x08) != 0 ? "code" : "data")));
     return entry;
 }
 
@@ -124,7 +124,7 @@ bool ReadTable(uint32_t base, uint32_t limit, std::vector<uint8_t>* bytes, Error
         return Fail(error, "bad_address", "descriptor table limit is implausible");
     bytes->resize(size);
     Address address;
-    address.modus = "linear";
+    address.mode = "linear";
     address.has_linear = true;
     address.linear = base;
     RangeList missing;
@@ -161,7 +161,7 @@ void RegisterCpu()
     });
     Register("cpu.descriptors", [](const JsonValue& params, JsonValue* result, Error* error) {
         std::string table = "gdt";
-        ParamStr(params, "tabelle", &table);
+        ParamStr(params, "table", &table);
         if (!cpu.pmode)
             return Fail(error, "bad_address", "descriptor tables need protected mode");
         uint32_t base = 0, limit = 0;
@@ -181,13 +181,13 @@ void RegisterCpu()
             base = static_cast<uint32_t>(cpu.idt.GetBase());
             limit = static_cast<uint32_t>(cpu.idt.GetLimit());
         } else {
-            return Fail(error, "bad_argument", "tabelle must be gdt, ldt or idt");
+            return Fail(error, "bad_argument", "table must be gdt, ldt or idt");
         }
         std::vector<uint8_t> bytes;
         if (!ReadTable(base, limit, &bytes, error))
             return false;
         uint64_t only = 0;
-        const bool filter = ParamU64(params, "selektor", &only);
+        const bool filter = ParamU64(params, "selector", &only);
         JsonValue entries = JsonValue::Array();
         for (uint32_t index = 0; index * 8u + 7u < bytes.size(); ++index) {
             Descriptor desc;
@@ -198,11 +198,11 @@ void RegisterCpu()
                     continue;
                 JsonValue gate = JsonValue::Object();
                 Set(&gate, "index", Num(index));
-                Set(&gate, "selektor", Hex(desc.GetSelector(), 4));
+                Set(&gate, "selector", Hex(desc.GetSelector(), 4));
                 Set(&gate, "offset", Hex(static_cast<uint32_t>(desc.GetOffset()), 8));
-                Set(&gate, "typ", Hex(desc.Type(), 2));
+                Set(&gate, "type", Hex(desc.Type(), 2));
                 Set(&gate, "dpl", Num(desc.DPL()));
-                Set(&gate, "praesent", Bool(desc.saved.seg.p != 0));
+                Set(&gate, "present", Bool(desc.saved.seg.p != 0));
                 entries.array.push_back(gate);
                 continue;
             }
@@ -213,36 +213,36 @@ void RegisterCpu()
                 continue; // null descriptor
             entries.array.push_back(SegmentDescriptorJson(index, selector, desc));
         }
-        Set(result, "tabelle", Str(table));
-        Set(result, "basis", Hex(base, 8));
+        Set(result, "table", Str(table));
+        Set(result, "base", Hex(base, 8));
         Set(result, "limit", Hex(limit, 4));
-        Set(result, "eintraege", entries);
+        Set(result, "entries", entries);
         return true;
     });
     Register("cpu.translate", [](const JsonValue& params, JsonValue* result, Error* error) {
         std::string text;
-        if (!ParamStr(params, "adresse", &text))
-            return Fail(error, "bad_argument", "parameter adresse is required");
+        if (!ParamStr(params, "address", &text))
+            return Fail(error, "bad_argument", "parameter address is required");
         Address address;
         if (!ParseAddress(text, &address, error))
             return false;
         *result = AddressJson(address);
         if (address.has_linear && !address.has_phys)
-            Set(result, "fehler", Str("page_not_present"));
+            Set(result, "error", Str("page_not_present"));
         return true;
     });
     Register("cpu.paging", [](const JsonValue& params, JsonValue* result, Error* error) {
         std::string text;
-        if (!ParamStr(params, "adresse", &text))
-            return Fail(error, "bad_argument", "parameter adresse is required");
+        if (!ParamStr(params, "address", &text))
+            return Fail(error, "bad_argument", "parameter address is required");
         Address address;
         if (!ParseAddress(text, &address, error))
             return false;
         if (!address.has_linear)
             return Fail(error, "bad_argument", "cpu.paging needs a linear or segmented address");
         uint64_t length = 4096;
-        if (Param(params, "laenge") != nullptr && (!ParamU64(params, "laenge", &length) || length == 0))
-            return Fail(error, "bad_argument", "laenge must be positive");
+        if (Param(params, "length") != nullptr && (!ParamU64(params, "length", &length) || length == 0))
+            return Fail(error, "bad_argument", "length must be positive");
         const bool on = (cpu.cr0 & 0x80000000u) != 0;
         const uint32_t dir = static_cast<uint32_t>(PAGING_GetDirBase()) & 0xFFFFF000u;
         JsonValue pages = JsonValue::Array();
@@ -258,7 +258,7 @@ void RegisterCpu()
             JsonValue entry = JsonValue::Object();
             Set(&entry, "linear", Hex(linear, 8));
             if (!on) {
-                Set(&entry, "praesent", Bool(true));
+                Set(&entry, "present", Bool(true));
                 Set(&entry, "phys", Hex(linear, 8));
                 pages.array.push_back(entry);
                 continue;
@@ -266,7 +266,7 @@ void RegisterCpu()
             const uint32_t pde = phys_readd(static_cast<PhysPt>(dir + ((linear >> 22) << 2)));
             Set(&entry, "pde", Hex(pde, 8));
             const bool big = (pde & 0x80u) != 0 && (cpu.cr4 & 0x10u) != 0;
-            Set(&entry, "gross", Bool(big));
+            Set(&entry, "uppercase", Bool(big));
             uint32_t flags_entry = pde;
             bool present = (pde & 1u) != 0;
             if (present && !big) {
@@ -279,7 +279,7 @@ void RegisterCpu()
             Error ignored;
             if (present && !LinearToPhys(linear, &phys, &ignored))
                 present = false; // page directory/table outside guest RAM
-            Set(&entry, "praesent", Bool(present));
+            Set(&entry, "present", Bool(present));
             if (present) {
                 Set(&entry, "phys", Hex(phys, 8));
                 Set(&entry, "rw", Bool((flags_entry & 2u) != 0));
@@ -289,8 +289,8 @@ void RegisterCpu()
         }
         Set(result, "paging", Bool(on));
         Set(result, "cr3", Hex(static_cast<uint32_t>(PAGING_GetDirBase()), 8));
-        Set(result, "seiten", pages);
-        Set(result, "abgeschnitten", Bool(truncated));
+        Set(result, "pages", pages);
+        Set(result, "truncated", Bool(truncated));
         return true;
     });
 }

@@ -50,21 +50,21 @@ namespace {
 void AddRealModeHint(JsonValue* result)
 {
     if (!cpu.pmode)
-        Set(result, "hinweis", Str("Gast im Real Mode, Programm-Paging inaktiv"));
+        Set(result, "hint", Str("guest is in real mode, program paging is inactive"));
 }
 
 bool AddressParam(const JsonValue& params, Address* address, Error* error)
 {
     std::string text;
-    if (!ParamStr(params, "adresse", &text))
-        return Fail(error, "bad_argument", "parameter adresse (string) is required");
+    if (!ParamStr(params, "address", &text))
+        return Fail(error, "bad_argument", "parameter address (string) is required");
     return ParseAddress(text, address, error);
 }
 
 bool LengthParam(const JsonValue& params, uint64_t max, uint64_t* length, Error* error)
 {
-    if (!ParamU64(params, "laenge", length) || *length == 0 || *length > max)
-        return Fail(error, "bad_argument", "laenge must be between 1 and " + std::to_string(max));
+    if (!ParamU64(params, "length", length) || *length == 0 || *length > max)
+        return Fail(error, "bad_argument", "length must be between 1 and " + std::to_string(max));
     return true;
 }
 
@@ -80,10 +80,10 @@ void RegisterMem()
         std::vector<uint8_t> data(static_cast<size_t>(length));
         RangeList missing;
         ReadAddress(address, data.data(), data.size(), &missing);
-        Set(result, "adresse", AddressJson(address));
-        Set(result, "laenge", Num(length));
+        Set(result, "address", AddressJson(address));
+        Set(result, "length", Num(length));
         Set(result, "hex", Str(ToHex(data.data(), data.size())));
-        Set(result, "fehlend", RangesJson(missing));
+        Set(result, "missing", RangesJson(missing));
         AddRealModeHint(result);
         return true;
     });
@@ -97,8 +97,8 @@ void RegisterMem()
             return Fail(error, "bad_argument", "hex must be an even-length hex string of at most 64 KiB");
         if (!WriteAddress(address, data.data(), data.size(), error))
             return false;
-        Set(result, "adresse", AddressJson(address));
-        Set(result, "laenge", Num(data.size()));
+        Set(result, "address", AddressJson(address));
+        Set(result, "length", Num(data.size()));
         return true;
     });
     Register("mem.dump", [](const JsonValue& params, JsonValue* result, Error* error) {
@@ -117,17 +117,17 @@ void RegisterMem()
             return false;
         JsonValue meta = JsonValue::Object();
         Set(&meta, "format", Str("dosbox-lab-dump/1"));
-        Set(&meta, "adresse", AddressJson(address));
-        Set(&meta, "laenge", Num(length));
-        Set(&meta, "fehlend", RangesJson(missing));
+        Set(&meta, "address", AddressJson(address));
+        Set(&meta, "length", Num(length));
+        Set(&meta, "missing", RangesJson(missing));
         const std::string meta_text = dosbox_agent::AGENT_SerializeJson(meta);
         std::string json_path;
         if (!WriteOutputFile(name + ".json", meta_text.data(), meta_text.size(), &json_path, error))
             return false;
-        Set(result, "pfad", Str(bin_path));
-        Set(result, "json_pfad", Str(json_path));
-        Set(result, "laenge", Num(length));
-        Set(result, "fehlend", RangesJson(missing));
+        Set(result, "path", Str(bin_path));
+        Set(result, "json_path", Str(json_path));
+        Set(result, "length", Num(length));
+        Set(result, "missing", RangesJson(missing));
         AddRealModeHint(result);
         return true;
     });
@@ -147,8 +147,8 @@ void RegisterMem()
         } else {
             return Fail(error, "bad_argument", "pass hex or text");
         }
-        if (Param(params, "max_treffer") != nullptr && (!ParamU64(params, "max_treffer", &max_hits) || max_hits == 0))
-            return Fail(error, "bad_argument", "max_treffer must be positive");
+        if (Param(params, "max_hits") != nullptr && (!ParamU64(params, "max_hits", &max_hits) || max_hits == 0))
+            return Fail(error, "bad_argument", "max_hits must be positive");
         JsonValue hits = JsonValue::Array();
         bool truncated = false;
         const size_t chunk = 1u << 20;
@@ -194,8 +194,8 @@ void RegisterMem()
                 ++it;
             }
         }
-        Set(result, "treffer", hits);
-        Set(result, "abgeschnitten", Bool(truncated));
+        Set(result, "hits", hits);
+        Set(result, "truncated", Bool(truncated));
         if (!all_missing.empty()) {
             // Chunks overlap by pattern-1 bytes, so the same range can appear twice: sort and merge.
             std::sort(all_missing.begin(), all_missing.end());
@@ -206,7 +206,7 @@ void RegisterMem()
                 else
                     merged.push_back(range);
             }
-            Set(result, "fehlend", RangesJson(merged));
+            Set(result, "missing", RangesJson(merged));
             AddRealModeHint(result);
         }
         return true;

@@ -10,7 +10,7 @@ namespace dmcp {
 bool WatchesActive();
 // Before every instruction while watches exist: remember the instruction, re-install TLB redirections.
 void WatchOnInstruction();
-// A watch with aktion "anhalten" fired since the last call: true exactly once.
+// A watch with action "halt" fired since the last call: true exactly once.
 bool WatchTakeStop();
 // Forgets a pending watch stop (state.load: the access belongs to the replaced state).
 void WatchDropPending();

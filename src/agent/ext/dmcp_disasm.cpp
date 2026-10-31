@@ -117,7 +117,7 @@ std::string AddressText(const Address& a)
     char text[40];
     if (!a.has_selector)
         std::snprintf(text, sizeof(text), "l:%08X", a.linear);
-    else if (a.modus == "real")
+    else if (a.mode == "real")
         std::snprintf(text, sizeof(text), "r:%04X:%04X", a.selector, a.offset);
     else
         std::snprintf(text, sizeof(text), "%04X:%08X", a.selector, a.offset);
@@ -136,7 +136,7 @@ bool TargetAddress(const Address& cur, const Target& t, Address* out)
     Error ignored;
     if (t.far_) {
         char text[40];
-        if (cur.modus == "real")
+        if (cur.mode == "real")
             std::snprintf(text, sizeof(text), "r:%04X:%04X", t.seg, t.off & 0xFFFFu);
         else
             std::snprintf(text, sizeof(text), "%04X:%08X", t.seg, t.off);
@@ -174,15 +174,15 @@ JsonValue Line(const Address& cur, int bits, bool file_format, uint32_t* length)
         bytes += hex;
     }
     JsonValue entry = JsonValue::Object();
-    Set(&entry, "adr", Annotated(cur, file_format));
+    Set(&entry, "addr", Annotated(cur, file_format));
     Set(&entry, "bytes", Str(bytes));
-    Set(&entry, "laenge", Num(size));
+    Set(&entry, "length", Num(size));
     Set(&entry, "text", Str(line));
     Target t;
     Address target;
     if (DirectTarget(cur.linear, offset, bits == 32, static_cast<uint32_t>(size), &t) &&
         TargetAddress(cur, t, &target))
-        Set(&entry, "ziel", Annotated(target, file_format));
+        Set(&entry, "target", Annotated(target, file_format));
     *length = static_cast<uint32_t>(size);
     return entry;
 }
@@ -227,9 +227,9 @@ void RegisterDisasm()
     Register("cpu.disassemble", [](const JsonValue& params, JsonValue* result, Error* error) {
         std::string text, name;
         Address cur;
-        if (Param(params, "adresse") != nullptr) {
-            if (!ParamStr(params, "adresse", &text))
-                return Fail(error, "bad_argument", "adresse must be a string");
+        if (Param(params, "address") != nullptr) {
+            if (!ParamStr(params, "address", &text))
+                return Fail(error, "bad_argument", "address must be a string");
             if (!ParseAddress(text, &cur, error))
                 return false;
         } else {
@@ -240,11 +240,11 @@ void RegisterDisasm()
         if (Param(params, "name") != nullptr && !ParamStr(params, "name", &name))
             return Fail(error, "bad_argument", "name must be a string");
         uint64_t count = 10;
-        if (Param(params, "anzahl") != nullptr && !ParamU64(params, "anzahl", &count))
-            return Fail(error, "bad_argument", "anzahl must be a number");
+        if (Param(params, "count") != nullptr && !ParamU64(params, "count", &count))
+            return Fail(error, "bad_argument", "count must be a number");
         const uint64_t max = name.empty() ? 200 : 100000;
         if (count == 0 || count > max)
-            return Fail(error, "bad_argument", "anzahl must be between 1 and " + std::to_string(max) +
+            return Fail(error, "bad_argument", "count must be between 1 and " + std::to_string(max) +
                                                    (name.empty() ? " (more with name: written to a file)" : ""));
         uint64_t bits = cur.bits != 0 ? static_cast<uint64_t>(cur.bits) : (cpu.code.big ? 32u : 16u);
         if (Param(params, "bits") != nullptr && (!ParamU64(params, "bits", &bits) || (bits != 16 && bits != 32)))
@@ -254,18 +254,18 @@ void RegisterDisasm()
         for (uint64_t i = 0; i < count; ++i) {
             uint8_t probe = 0;
             if (!PeekLinear(cur.linear, &probe)) {
-                Set(result, "ende", Str("nicht lesbar"));
+                Set(result, "end", Str("unreadable"));
                 break;
             }
             uint32_t length = 1;
             lines.push_back(Line(cur, static_cast<int>(bits), to_file, &length));
             cur = Offset(cur, length);
         }
-        Set(result, "naechste", Str(AddressText(cur)));
+        Set(result, "next", Str(AddressText(cur)));
         if (!to_file) {
             JsonValue list = JsonValue::Array();
             list.array = lines;
-            Set(result, "zeilen", list);
+            Set(result, "lines", list);
             return true;
         }
         std::string body;
@@ -274,8 +274,8 @@ void RegisterDisasm()
         std::string path;
         if (!WriteOutputFile(name + ".jsonl", body.data(), body.size(), &path, error))
             return false;
-        Set(result, "pfad", Str(path));
-        Set(result, "anzahl", Num(lines.size()));
+        Set(result, "path", Str(path));
+        Set(result, "count", Num(lines.size()));
         return true;
     });
 }

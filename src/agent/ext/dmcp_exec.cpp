@@ -38,19 +38,19 @@ bool g_paused = false;
 std::string g_stop_reason = "none";
 uint32_t g_stop_linear = 0;
 struct Breakpoint {
-    std::string quelle;   // address text as given (or "l:<hex>" for the legacy linear parameter)
+    std::string source;   // address text as given (or "l:<hex>" for the legacy linear parameter)
     Address address;      // resolved when added
-    Expr bedingung;
-    bool einmalig = false;
-    uint64_t treffer = 0; // stops (condition true)
+    Expr condition;
+    bool once = false;
+    uint64_t hits = 0; // stops (condition true)
 };
 std::map<uint32_t, Breakpoint> g_breakpoints; // key: linear address, one breakpoint per address
 
 struct IntBreakpoint {
-    uint8_t nummer = 0;
+    uint8_t number = 0;
     int ah = -1; // -1: any
     int al = -1;
-    uint64_t treffer = 0;
+    uint64_t hits = 0;
 };
 std::vector<IntBreakpoint> g_int_breakpoints;
 uint8_t g_stop_int = 0;
@@ -65,11 +65,11 @@ uint32_t g_skip_linear = 0; // the instruction the skip flag applies to (an IRQ 
 // CALLBACK_RunRealInt; that nested run must finish as part of the atomic step instead of pausing.
 bool g_in_step = false;
 
-// One stop condition shared by emu.pause bis=pmode, emu.run_until, emu.step_over and emu.frame_step.
+// One stop condition shared by emu.pause until=pmode, emu.run_until, emu.step_over and emu.frame_step.
 // All set parts must hold at the same time.
 struct Until {
     bool active = false;
-    std::string reason;          // becomes stop_reason and wartet_auf
+    std::string reason;          // becomes stop_reason and waiting_for
     bool pmode = false;          // protected mode, not v86
     bool paging = false;
     bool has_cs = false;
@@ -117,7 +117,7 @@ JsonValue StatusObject()
         Set(&result, "stop_linear", Hex(g_stop_linear, 8));
     if (g_stop_reason == "int_breakpoint") {
         JsonValue info = JsonValue::Object();
-        Set(&info, "nummer", Hex(g_stop_int, 2));
+        Set(&info, "number", Hex(g_stop_int, 2));
         Set(&info, "ax", Hex(g_stop_ax, 4));
         Set(&result, "stop_int", info);
     }
@@ -128,14 +128,14 @@ JsonValue StatusObject()
     Set(&result, "cycles_auto", Bool(CPU_CycleAutoAdjust));
     Set(&result, "halted", Bool(CPU_IsHLTed()));
     Set(&result, "pmode", Bool(cpu.pmode));
-    Set(&result, "befehls_hook", Bool(DMCP_hook_active));
+    Set(&result, "instruction_hook", Bool(DMCP_hook_active));
     Set(&result, "func", Bool(FuncActive()));
     Set(&result, "cs", Hex(SegValue(cs), 4));
     Set(&result, "eip", Hex(reg_eip, 8));
     if (g_until.active)
-        Set(&result, "wartet_auf", Str(g_until.reason));
-    Set(&result, "zeit_ms", NumFixed(PIC_FullIndex()));
-    Set(&result, "bilder", Num(g_frames));
+        Set(&result, "waiting_for", Str(g_until.reason));
+    Set(&result, "time_ms", NumFixed(PIC_FullIndex()));
+    Set(&result, "frames", Num(g_frames));
     Set(&result, "ram_bytes", Num(GuestRamBytes()));
     return result;
 }
@@ -149,54 +149,54 @@ JsonValue BreakpointList()
         list.array.push_back(Hex(item.first, 8));
         const Breakpoint& bp = item.second;
         JsonValue entry = JsonValue::Object();
-        JsonValue adr = AddressJson(bp.address);
-        AnnotateAddress(bp.address, &adr, false);
+        JsonValue addr = AddressJson(bp.address);
+        AnnotateAddress(bp.address, &addr, false);
         Set(&entry, "linear", Hex(item.first, 8));
-        Set(&entry, "adresse", adr);
-        Set(&entry, "quelle", Str(bp.quelle));
-        if (!bp.bedingung.Empty())
-            Set(&entry, "bedingung", Str(bp.bedingung.Text()));
-        Set(&entry, "einmalig", Bool(bp.einmalig));
-        Set(&entry, "treffer", Num(bp.treffer));
+        Set(&entry, "address", addr);
+        Set(&entry, "source", Str(bp.source));
+        if (!bp.condition.Empty())
+            Set(&entry, "condition", Str(bp.condition.Text()));
+        Set(&entry, "once", Bool(bp.once));
+        Set(&entry, "hits", Num(bp.hits));
         entries.array.push_back(entry);
     }
     JsonValue ints = JsonValue::Array();
     for (const IntBreakpoint& ib : g_int_breakpoints) {
         JsonValue entry = JsonValue::Object();
-        Set(&entry, "nummer", Hex(ib.nummer, 2));
+        Set(&entry, "number", Hex(ib.number, 2));
         if (ib.ah >= 0)
             Set(&entry, "ah", Hex(static_cast<uint64_t>(ib.ah), 2));
         if (ib.al >= 0)
             Set(&entry, "al", Hex(static_cast<uint64_t>(ib.al), 2));
-        Set(&entry, "treffer", Num(ib.treffer));
+        Set(&entry, "hits", Num(ib.hits));
         ints.array.push_back(entry);
     }
     Set(&result, "breakpoints", list);
-    Set(&result, "eintraege", entries);
-    Set(&result, "int_haltepunkte", ints);
+    Set(&result, "entries", entries);
+    Set(&result, "int_breakpoints", ints);
     return result;
 }
 
-// Breakpoint address from "adresse" (any form) or the legacy "linear" number.
-bool BreakAddress(const JsonValue& params, Address* address, std::string* quelle, Error* error)
+// Breakpoint address from "address" (any form) or the legacy "linear" number.
+bool BreakAddress(const JsonValue& params, Address* address, std::string* source, Error* error)
 {
     std::string text;
     uint64_t linear = 0;
-    if (ParamStr(params, "adresse", &text)) {
+    if (ParamStr(params, "address", &text)) {
         if (!ParseAddress(text, address, error))
             return false;
         if (!address->has_linear)
             return Fail(error, "bad_argument", "breakpoint address needs a linear form (not p:)");
-        *quelle = text;
+        *source = text;
         return true;
     }
     if (ParamU64(params, "linear", &linear) && linear <= 0xFFFFFFFFull) {
         char buffer[16];
         std::snprintf(buffer, sizeof(buffer), "l:%08X", static_cast<unsigned>(linear));
-        *quelle = buffer;
+        *source = buffer;
         return ParseAddress(buffer, address, error);
     }
-    return Fail(error, "bad_argument", "pass adresse (string) or linear (32-bit number)");
+    return Fail(error, "bad_argument", "pass address (string) or linear (32-bit number)");
 }
 
 bool OptionalByte(const JsonValue& params, const char* name, int* out, Error* error)
@@ -355,8 +355,8 @@ void RegisterExec()
     });
     Register("emu.pause", [](const JsonValue& params, JsonValue* result, Error* error) {
         std::string until;
-        if (Param(params, "bis") != nullptr && (!ParamStr(params, "bis", &until) || until != "pmode"))
-            return Fail(error, "bad_argument", "bis must be \"pmode\" (pause at the first protected-mode instruction)");
+        if (Param(params, "until") != nullptr && (!ParamStr(params, "until", &until) || until != "pmode"))
+            return Fail(error, "bad_argument", "until must be \"pmode\" (pause at the first protected-mode instruction)");
         if (until == "pmode" && !(cpu.pmode && !GETFLAG(VM))) {
             Until u;
             u.reason = "pmode";
@@ -406,25 +406,25 @@ void RegisterExec()
             u.has_cpl = true;
             u.cpl = static_cast<uint8_t>(number);
         }
-        if (Param(params, "adresse") != nullptr) {
+        if (Param(params, "address") != nullptr) {
             Address address;
-            if (!ParamStr(params, "adresse", &text))
-                return Fail(error, "bad_argument", "adresse must be a string");
+            if (!ParamStr(params, "address", &text))
+                return Fail(error, "bad_argument", "address must be a string");
             if (!ParseAddress(text, &address, error))
                 return false;
             if (!address.has_linear)
-                return Fail(error, "bad_argument", "adresse must be a code address with a linear form (not p:)");
+                return Fail(error, "bad_argument", "address must be a code address with a linear form (not p:)");
             u.has_linear = true;
             u.linear = address.linear;
         }
-        if (Param(params, "ausdruck") != nullptr) {
-            if (!ParamStr(params, "ausdruck", &text))
-                return Fail(error, "bad_argument", "ausdruck must be a string");
+        if (Param(params, "expression") != nullptr) {
+            if (!ParamStr(params, "expression", &text))
+                return Fail(error, "bad_argument", "expression must be a string");
             if (!u.expr.Compile(text, error))
                 return false;
         }
         if (!u.pmode && !u.paging && !u.has_cs && !u.has_cpl && !u.has_linear && u.expr.Empty())
-            return Fail(error, "bad_argument", "pass at least one of adresse, pmode, paging, cs, cpl, ausdruck");
+            return Fail(error, "bad_argument", "pass at least one of address, pmode, paging, cs, cpl, expression");
         Arm(u);
         ResumeArmed();
         UpdateHookActive();
@@ -433,13 +433,13 @@ void RegisterExec()
     });
     Register("emu.eval", [](const JsonValue& params, JsonValue* result, Error* error) {
         std::string text;
-        if (!ParamStr(params, "ausdruck", &text))
-            return Fail(error, "bad_argument", "ausdruck (string) is required");
+        if (!ParamStr(params, "expression", &text))
+            return Fail(error, "bad_argument", "expression (string) is required");
         Expr expr;
         if (!expr.Compile(text, error))
             return false;
-        Set(result, "ausdruck", Str(text));
-        Set(result, "wert", Hex(expr.Eval(), 8));
+        Set(result, "expression", Str(text));
+        Set(result, "value", Hex(expr.Eval(), 8));
         return true;
     });
     Register("emu.step", [](const JsonValue& params, JsonValue* result, Error* error) {
@@ -504,7 +504,7 @@ void RegisterExec()
             if (WatchTakeStop())
                 StopAt("watch");
             *result = StatusObject();
-            Set(result, "art", Str("schritt"));
+            Set(result, "kind", Str("step"));
             return true;
         }
         const bool code32 = here.bits == 32;
@@ -522,15 +522,15 @@ void RegisterExec()
         ResumeArmed();
         UpdateHookActive();
         *result = StatusObject();
-        Set(result, "art", Str("laeuft"));
-        Set(result, "ziel", Hex(u.linear, 8));
+        Set(result, "kind", Str("running"));
+        Set(result, "target", Hex(u.linear, 8));
         return true;
     });
     Register("emu.frame_step", [](const JsonValue& params, JsonValue* result, Error* error) {
         uint64_t frames = 1;
-        if (Param(params, "anzahl") != nullptr &&
-            (!ParamU64(params, "anzahl", &frames) || frames == 0 || frames > 10000))
-            return Fail(error, "bad_argument", "anzahl must be between 1 and 10000");
+        if (Param(params, "count") != nullptr &&
+            (!ParamU64(params, "count", &frames) || frames == 0 || frames > 10000))
+            return Fail(error, "bad_argument", "count must be between 1 and 10000");
         Until u;
         u.reason = "frame";
         u.frames_left = frames;
@@ -542,18 +542,18 @@ void RegisterExec()
     });
     Register("emu.break_add", [](const JsonValue& params, JsonValue* result, Error* error) {
         Breakpoint bp;
-        if (!BreakAddress(params, &bp.address, &bp.quelle, error))
+        if (!BreakAddress(params, &bp.address, &bp.source, error))
             return false;
         std::string text;
-        if (Param(params, "bedingung") != nullptr) {
-            if (!ParamStr(params, "bedingung", &text) || !bp.bedingung.Compile(text, error)) {
+        if (Param(params, "condition") != nullptr) {
+            if (!ParamStr(params, "condition", &text) || !bp.condition.Compile(text, error)) {
                 if (error->code.empty())
-                    Fail(error, "bad_argument", "bedingung must be a string");
+                    Fail(error, "bad_argument", "condition must be a string");
                 return false;
             }
         }
-        if (Param(params, "einmalig") != nullptr && !ParamBool(params, "einmalig", &bp.einmalig))
-            return Fail(error, "bad_argument", "einmalig must be true or false");
+        if (Param(params, "once") != nullptr && !ParamBool(params, "once", &bp.once))
+            return Fail(error, "bad_argument", "once must be true or false");
         g_breakpoints[bp.address.linear] = bp;
         UpdateHookActive();
         *result = BreakpointList();
@@ -567,14 +567,14 @@ void RegisterExec()
             g_breakpoints.clear();
         } else {
             Address address;
-            std::string quelle;
-            if (!BreakAddress(params, &address, &quelle, error))
+            std::string source;
+            if (!BreakAddress(params, &address, &source, error))
                 return false;
             removed = g_breakpoints.erase(address.linear) != 0;
         }
         UpdateHookActive();
         *result = BreakpointList();
-        Set(result, "entfernt", Bool(removed));
+        Set(result, "removed", Bool(removed));
         return true;
     });
     Register("emu.break_list", [](const JsonValue&, JsonValue* result, Error*) {
@@ -582,16 +582,16 @@ void RegisterExec()
         return true;
     });
     Register("emu.break_int_add", [](const JsonValue& params, JsonValue* result, Error* error) {
-        uint32_t nummer = 0;
+        uint32_t number = 0;
         IntBreakpoint ib;
-        if (!HexField(params, "nummer", &nummer) || nummer > 0xFF)
-            return Fail(error, "bad_argument", "nummer must be an interrupt number 00..FF (hex string)");
-        ib.nummer = static_cast<uint8_t>(nummer);
+        if (!HexField(params, "number", &number) || number > 0xFF)
+            return Fail(error, "bad_argument", "number must be an interrupt number 00..FF (hex string)");
+        ib.number = static_cast<uint8_t>(number);
         if (!OptionalByte(params, "ah", &ib.ah, error) || !OptionalByte(params, "al", &ib.al, error))
             return false;
         bool replaced = false;
         for (IntBreakpoint& old : g_int_breakpoints) {
-            if (old.nummer == ib.nummer && old.ah == ib.ah && old.al == ib.al) {
+            if (old.number == ib.number && old.ah == ib.ah && old.al == ib.al) {
                 old = ib;
                 replaced = true;
             }
@@ -609,15 +609,15 @@ void RegisterExec()
             removed = !g_int_breakpoints.empty();
             g_int_breakpoints.clear();
         } else {
-            uint32_t nummer = 0;
+            uint32_t number = 0;
             int ah = -1, al = -1;
-            if (!HexField(params, "nummer", &nummer) || nummer > 0xFF)
-                return Fail(error, "bad_argument", "pass nummer (hex string) or all:true");
+            if (!HexField(params, "number", &number) || number > 0xFF)
+                return Fail(error, "bad_argument", "pass number (hex string) or all:true");
             if (!OptionalByte(params, "ah", &ah, error) || !OptionalByte(params, "al", &al, error))
                 return false;
             for (size_t i = g_int_breakpoints.size(); i-- > 0;) {
                 const IntBreakpoint& ib = g_int_breakpoints[i];
-                if (ib.nummer == nummer && ib.ah == ah && ib.al == al) {
+                if (ib.number == number && ib.ah == ah && ib.al == al) {
                     g_int_breakpoints.erase(g_int_breakpoints.begin() + static_cast<long>(i));
                     removed = true;
                 }
@@ -625,7 +625,7 @@ void RegisterExec()
         }
         UpdateHookActive();
         *result = BreakpointList();
-        Set(result, "entfernt", Bool(removed));
+        Set(result, "removed", Bool(removed));
         return true;
     });
 }
@@ -647,7 +647,7 @@ bool DMCP_InstructionHook()
     using namespace dmcp;
     const uint32_t here = static_cast<uint32_t>(SegPhys(cs) + reg_eip);
     if (WatchesActive()) {
-        // An access of the previous instruction fired an "anhalten" watch: stop before this one.
+        // An access of the previous instruction fired an "halt" watch: stop before this one.
         if (!g_in_step && WatchTakeStop()) {
             StopAt("watch");
             return true;
@@ -673,19 +673,19 @@ bool DMCP_InstructionHook()
         }
         if (!g_breakpoints.empty()) {
             const auto it = g_breakpoints.find(here);
-            if (it != g_breakpoints.end() && (it->second.bedingung.Empty() || it->second.bedingung.Eval() != 0)) {
+            if (it != g_breakpoints.end() && (it->second.condition.Empty() || it->second.condition.Eval() != 0)) {
                 Breakpoint& bp = it->second;
-                ++bp.treffer;
+                ++bp.hits;
                 StopAt("breakpoint");
                 g_stop_linear = here;
                 JsonValue event = JsonValue::Object();
-                Set(&event, "art", Str("code"));
+                Set(&event, "kind", Str("code"));
                 Set(&event, "linear", HexOut(here, 8, true));
-                Set(&event, "treffer", Num(bp.treffer));
-                if (!bp.bedingung.Empty())
-                    Set(&event, "bedingung", Str(bp.bedingung.Text()));
+                Set(&event, "hits", Num(bp.hits));
+                if (!bp.condition.Empty())
+                    Set(&event, "condition", Str(bp.condition.Text()));
                 EmitEvent("breakpoint", event);
-                if (bp.einmalig) {
+                if (bp.once) {
                     g_breakpoints.erase(it);
                     UpdateHookActive();
                 }
@@ -696,18 +696,18 @@ bool DMCP_InstructionHook()
             uint8_t vector = 0;
             if (IntAt(here, &vector)) {
                 for (IntBreakpoint& ib : g_int_breakpoints) {
-                    if (ib.nummer != vector || (ib.ah >= 0 && ib.ah != reg_ah) || (ib.al >= 0 && ib.al != reg_al))
+                    if (ib.number != vector || (ib.ah >= 0 && ib.ah != reg_ah) || (ib.al >= 0 && ib.al != reg_al))
                         continue;
-                    ++ib.treffer;
+                    ++ib.hits;
                     StopAt("int_breakpoint");
                     g_stop_int = vector;
                     g_stop_ax = reg_ax;
                     JsonValue event = JsonValue::Object();
-                    Set(&event, "art", Str("int"));
+                    Set(&event, "kind", Str("int"));
                     Set(&event, "linear", HexOut(here, 8, true));
-                    Set(&event, "nummer", HexOut(vector, 2, true));
+                    Set(&event, "number", HexOut(vector, 2, true));
                     Set(&event, "ax", HexOut(reg_ax, 4, true));
-                    Set(&event, "treffer", Num(ib.treffer));
+                    Set(&event, "hits", Num(ib.hits));
                     EmitEvent("breakpoint", event);
                     return true;
                 }

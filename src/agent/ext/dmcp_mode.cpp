@@ -48,7 +48,7 @@ bool Same(const ModeState& a, const ModeState& b)
 JsonValue StateJson(const ModeState& s)
 {
     JsonValue o = JsonValue::Object();
-    Set(&o, "modus", Str(!s.pmode ? "real" : (s.v86 ? "v86" : "pm")));
+    Set(&o, "mode", Str(!s.pmode ? "real" : (s.v86 ? "v86" : "pm")));
     Set(&o, "paging", Bool(s.paging));
     Set(&o, "cr3", HexOut(s.cr3, 8, true));
     return o;
@@ -69,8 +69,8 @@ void ModeOnInstruction()
         const ModeState now = Current();
         if (!g_known || !Same(now, g_last)) {
             JsonValue event = JsonValue::Object();
-            Set(&event, "von", g_known ? StateJson(g_last) : JsonValue::Null());
-            Set(&event, "nach", StateJson(now));
+            Set(&event, "from", g_known ? StateJson(g_last) : JsonValue::Null());
+            Set(&event, "to", StateJson(now));
             g_last = now;
             g_known = true;
             EmitEvent("mode", event);
@@ -88,7 +88,7 @@ void ModeOnInstruction()
     if (!g_seen.insert((static_cast<uint64_t>(sel) << 32) | base).second)
         return;
     JsonValue desc = JsonValue::Object();
-    Set(&desc, "basis", HexOut(base, 8, true));
+    Set(&desc, "base", HexOut(base, 8, true));
     Set(&desc, "bits", Num(cpu.code.big ? 32 : 16));
     Descriptor d;
     Error ignored;
@@ -98,7 +98,7 @@ void ModeOnInstruction()
     }
     JsonValue event = JsonValue::Object();
     Set(&event, "sel", HexOut(sel, 4, true));
-    Set(&event, "deskriptor", desc);
+    Set(&event, "descriptor", desc);
     EmitEvent("new_code_selector", event);
 }
 

@@ -33,13 +33,13 @@ struct Config {
     std::set<std::string> types; // empty = all
     EventTypes flags;
     std::vector<IntRule> int_rules;
-    std::string int_mode = "alle"; // "alle", "pm", "real"
+    std::string int_mode = "all"; // "all", "pm", "real"
     bool int_returns = false;
     uint64_t max_bytes = 256ull << 20;
-    uint32_t datei_vorschau = 16;
+    uint32_t file_preview = 16;
 };
 
-const char* const kTypes[] = {"exec", "exit", "int", "int_ret", "mode", "new_code_selector", "limit_reached", "breakpoint", "watch", "datei"};
+const char* const kTypes[] = {"exec", "exit", "int", "int_ret", "mode", "new_code_selector", "limit_reached", "breakpoint", "watch", "file"};
 const size_t kRingSize = 10000;
 
 bool g_active = false;
@@ -54,17 +54,17 @@ uint64_t g_generation = 0;
 unsigned g_unflushed = 0;
 std::deque<JsonValue> g_ring; // last kRingSize events for events.read
 
-bool KnownType(const std::string& typ)
+bool KnownType(const std::string& type)
 {
     for (const char* known : kTypes)
-        if (typ == known)
+        if (type == known)
             return true;
     return false;
 }
 
-bool TypeOn(const std::string& typ)
+bool TypeOn(const std::string& type)
 {
-    return typ == "limit_reached" || g_cfg.types.empty() || g_cfg.types.count(typ) != 0;
+    return type == "limit_reached" || g_cfg.types.empty() || g_cfg.types.count(type) != 0;
 }
 
 void StopEvents(bool limit)
@@ -78,18 +78,18 @@ void StopEvents(bool limit)
     UpdateHookActive();
 }
 
-void WriteEvent(const std::string& typ, JsonValue event)
+void WriteEvent(const std::string& type, JsonValue event)
 {
     Set(&event, "nr", Num(++g_nr));
-    Set(&event, "typ", Str(typ));
-    Set(&event, "zeit_ms", NumFixed(PIC_FullIndex()));
-    if (event.Find("adr") == nullptr)
-        Set(&event, "adr", AddressJson(SegCacheAddress(cs, reg_eip), true));
+    Set(&event, "type", Str(type));
+    Set(&event, "time_ms", NumFixed(PIC_FullIndex()));
+    if (event.Find("addr") == nullptr)
+        Set(&event, "addr", AddressJson(SegCacheAddress(cs, reg_eip), true));
     const std::string line = dosbox_agent::AGENT_SerializeJson(event) + "\n";
-    if (typ != "limit_reached" && g_bytes + line.size() > g_cfg.max_bytes) {
+    if (type != "limit_reached" && g_bytes + line.size() > g_cfg.max_bytes) {
         --g_nr; // the dropped event keeps no number
         JsonValue limit = JsonValue::Object();
-        Set(&limit, "aufzeichnung", Str("events"));
+        Set(&limit, "recording", Str("events"));
         Set(&limit, "detail", Str("max_bytes " + std::to_string(g_cfg.max_bytes)));
         WriteEvent("limit_reached", limit);
         StopEvents(true);
@@ -110,43 +110,43 @@ void WriteEvent(const std::string& typ, JsonValue event)
 JsonValue StatusJson()
 {
     JsonValue r = JsonValue::Object();
-    Set(&r, "aktiv", Bool(g_active));
-    Set(&r, "datei", Str(g_path));
-    Set(&r, "anzahl", Num(g_count));
+    Set(&r, "active", Bool(g_active));
+    Set(&r, "file", Str(g_path));
+    Set(&r, "count", Num(g_count));
     Set(&r, "bytes", Num(g_bytes));
     Set(&r, "max_bytes", Num(g_cfg.max_bytes));
-    Set(&r, "letzte_nr", Num(g_nr));
-    Set(&r, "limit_erreicht", Bool(g_limit_hit));
+    Set(&r, "last_nr", Num(g_nr));
+    Set(&r, "limit_reached_flag", Bool(g_limit_hit));
     JsonValue types = JsonValue::Array();
     for (const char* known : kTypes)
         if (TypeOn(known))
             types.array.push_back(Str(known));
-    Set(&r, "typen", types);
+    Set(&r, "types", types);
     return r;
 }
 
 bool ParseConfig(const JsonValue& params, Config* cfg, Error* error)
 {
-    const JsonValue* types = Param(params, "typen");
+    const JsonValue* types = Param(params, "types");
     if (types != nullptr) {
         if (types->type != JsonType::Array)
-            return Fail(error, "bad_argument", "typen must be a list");
+            return Fail(error, "bad_argument", "types must be a list");
         for (const JsonValue& t : types->array) {
             if (t.type != JsonType::String || !KnownType(t.text))
                 return Fail(error, "bad_argument", "unknown event type (exec, exit, int, int_ret, mode, "
-                                                   "new_code_selector, limit_reached, breakpoint, watch, datei)");
+                                                   "new_code_selector, limit_reached, breakpoint, watch, file)");
             cfg->types.insert(t.text);
         }
     }
     const JsonValue* rules = Param(params, "int_filter");
     if (rules != nullptr) {
         if (rules->type != JsonType::Array)
-            return Fail(error, "bad_argument", "int_filter must be a list of {nummer, ah?, ax?}");
+            return Fail(error, "bad_argument", "int_filter must be a list of {number, ah?, ax?}");
         for (const JsonValue& entry : rules->array) {
             IntRule rule;
             uint32_t value = 0;
-            if (entry.type != JsonType::Object || !HexField(entry, "nummer", &value) || value > 0xFF)
-                return Fail(error, "bad_argument", "int_filter entries need nummer (hex string, 00-FF)");
+            if (entry.type != JsonType::Object || !HexField(entry, "number", &value) || value > 0xFF)
+                return Fail(error, "bad_argument", "int_filter entries need number (hex string, 00-FF)");
             rule.num = static_cast<uint8_t>(value);
             if (Param(entry, "ah") != nullptr) {
                 if (!HexField(entry, "ah", &value) || value > 0xFF)
@@ -167,21 +167,21 @@ bool ParseConfig(const JsonValue& params, Config* cfg, Error* error)
             cfg->int_rules.push_back(rule);
         }
     }
-    if (Param(params, "int_modus") != nullptr) {
-        if (!ParamStr(params, "int_modus", &cfg->int_mode) ||
-            (cfg->int_mode != "alle" && cfg->int_mode != "pm" && cfg->int_mode != "real"))
-            return Fail(error, "bad_argument", "int_modus must be alle, pm or real");
+    if (Param(params, "int_mode") != nullptr) {
+        if (!ParamStr(params, "int_mode", &cfg->int_mode) ||
+            (cfg->int_mode != "all" && cfg->int_mode != "pm" && cfg->int_mode != "real"))
+            return Fail(error, "bad_argument", "int_mode must be all, pm or real");
     }
-    if (Param(params, "mit_rueckgabe") != nullptr && !ParamBool(params, "mit_rueckgabe", &cfg->int_returns))
-        return Fail(error, "bad_argument", "mit_rueckgabe must be true or false");
+    if (Param(params, "with_return") != nullptr && !ParamBool(params, "with_return", &cfg->int_returns))
+        return Fail(error, "bad_argument", "with_return must be true or false");
     if (Param(params, "max_bytes") != nullptr && (!ParamU64(params, "max_bytes", &cfg->max_bytes) ||
                                                   cfg->max_bytes < 4096))
         return Fail(error, "bad_argument", "max_bytes must be at least 4096");
-    if (Param(params, "datei_vorschau") != nullptr) {
+    if (Param(params, "file_preview") != nullptr) {
         uint64_t v = 0;
-        if (!ParamU64(params, "datei_vorschau", &v) || v > 256)
-            return Fail(error, "bad_argument", "datei_vorschau must be between 0 and 256");
-        cfg->datei_vorschau = static_cast<uint32_t>(v);
+        if (!ParamU64(params, "file_preview", &v) || v > 256)
+            return Fail(error, "bad_argument", "file_preview must be between 0 and 256");
+        cfg->file_preview = static_cast<uint32_t>(v);
     }
     cfg->flags.exec = cfg->types.empty() || cfg->types.count("exec") != 0;
     cfg->flags.exit = cfg->types.empty() || cfg->types.count("exit") != 0;
@@ -189,7 +189,7 @@ bool ParseConfig(const JsonValue& params, Config* cfg, Error* error)
     cfg->flags.int_ret = cfg->types.empty() || cfg->types.count("int_ret") != 0;
     cfg->flags.mode = cfg->types.empty() || cfg->types.count("mode") != 0;
     cfg->flags.new_code_selector = cfg->types.empty() || cfg->types.count("new_code_selector") != 0;
-    cfg->flags.datei = cfg->types.empty() || cfg->types.count("datei") != 0;
+    cfg->flags.file = cfg->types.empty() || cfg->types.count("file") != 0;
     return true;
 }
 
@@ -219,13 +219,13 @@ const EventTypes& ActiveEventTypes() { return g_cfg.flags; }
 uint64_t EventsGeneration() { return g_generation; }
 uint64_t LastEventNr() { return g_nr; }
 bool IntReturnsWanted() { return g_cfg.int_returns; }
-uint32_t DateiVorschau() { return g_cfg.datei_vorschau; }
+uint32_t FilePreview() { return g_cfg.file_preview; }
 
-void EmitEvent(const std::string& typ, JsonValue event)
+void EmitEvent(const std::string& type, JsonValue event)
 {
-    if (!g_active || !TypeOn(typ))
+    if (!g_active || !TypeOn(type))
         return;
-    WriteEvent(typ, event);
+    WriteEvent(type, event);
 }
 
 bool IntWanted(uint8_t num, uint16_t ax, bool pm)
@@ -240,12 +240,12 @@ bool IntWanted(uint8_t num, uint16_t ax, bool pm)
     return false;
 }
 
-void ReportLimit(const std::string& aufzeichnung, const std::string& detail)
+void ReportLimit(const std::string& recording, const std::string& detail)
 {
     if (!g_active)
         return;
     JsonValue event = JsonValue::Object();
-    Set(&event, "aufzeichnung", Str(aufzeichnung));
+    Set(&event, "recording", Str(recording));
     Set(&event, "detail", Str(detail));
     WriteEvent("limit_reached", event);
 }
@@ -257,21 +257,21 @@ void EventOnExec(const std::string& path, uint16_t flags, bool com, uint16_t psp
         return;
     const bool overlay = flags == 3;
     JsonValue event = JsonValue::Object();
-    Set(&event, "datei", Str(path));
+    Set(&event, "file", Str(path));
     Set(&event, "al", HexOut(flags, 2, true));
-    Set(&event, "art", Str(overlay ? "overlay" : (com ? "com" : "exe")));
-    Set(&event, "modul", Str(ModuleNameFromPath(path)));
+    Set(&event, "kind", Str(overlay ? "overlay" : (com ? "com" : "exe")));
+    Set(&event, "module", Str(ModuleNameFromPath(path)));
     Set(&event, "psp", HexOut(psp, 4, true));
     Set(&event, "load_seg", HexOut(load_seg, 4, true));
     Set(&event, "reloc", HexOut(reloc, 4, true));
-    Set(&event, "paragraphen", HexOut(paragraphs, 4, true));
+    Set(&event, "paragraphs", HexOut(paragraphs, 4, true));
     if (!overlay) {
-        Set(&event, "rel_basis", HexOut(com ? psp : load_seg, 4, true));
-        Set(&event, "befehlszeile", Str(CommandTail(psp)));
-        Set(&event, "einsprung", Str(SegOff(csip)));
+        Set(&event, "rel_base", HexOut(com ? psp : load_seg, 4, true));
+        Set(&event, "command_line", Str(CommandTail(psp)));
+        Set(&event, "entry", Str(SegOff(csip)));
         Set(&event, "stack", Str(SegOff(sssp)));
     } else {
-        Set(&event, "rel_basis", HexOut(load_seg, 4, true));
+        Set(&event, "rel_base", HexOut(load_seg, 4, true));
     }
     WriteEvent("exec", event);
 }
@@ -316,8 +316,8 @@ void RegisterEvents()
     Register("events.read", [](const JsonValue& params, JsonValue* result, Error* error) {
         uint64_t since = 0;
         uint64_t max = 50;
-        if (Param(params, "seit_nr") != nullptr && !ParamU64(params, "seit_nr", &since))
-            return Fail(error, "bad_argument", "seit_nr must be a number");
+        if (Param(params, "since_nr") != nullptr && !ParamU64(params, "since_nr", &since))
+            return Fail(error, "bad_argument", "since_nr must be a number");
         if (Param(params, "max") != nullptr && (!ParamU64(params, "max", &max) || max == 0 || max > 500))
             return Fail(error, "bad_argument", "max must be between 1 and 500");
         if (g_active) {
@@ -333,12 +333,12 @@ void RegisterEvents()
             if (nr > since && list.array.size() < max)
                 list.array.push_back(event);
         }
-        Set(result, "ereignisse", list);
-        Set(result, "letzte_nr", Num(g_nr));
-        Set(result, "aelteste_im_puffer", Num(oldest));
-        Set(result, "verpasst", Bool(oldest != 0 && since + 1 < oldest));
-        Set(result, "aktiv", Bool(g_active));
-        Set(result, "datei", Str(g_path));
+        Set(result, "events", list);
+        Set(result, "last_nr", Num(g_nr));
+        Set(result, "oldest_in_buffer", Num(oldest));
+        Set(result, "missed", Bool(oldest != 0 && since + 1 < oldest));
+        Set(result, "active", Bool(g_active));
+        Set(result, "file", Str(g_path));
         return true;
     });
 }
@@ -359,10 +359,10 @@ void DMCP_OnExit(uint16_t psp, bool tsr, uint8_t exit_code)
     JsonValue event = JsonValue::Object();
     Set(&event, "psp", HexOut(psp, 4, true));
     Set(&event, "exit_code", Num(exit_code));
-    Set(&event, "art", Str(tsr ? "tsr" : "normal"));
+    Set(&event, "kind", Str(tsr ? "tsr" : "normal"));
     for (auto it = Modules().rbegin(); it != Modules().rend(); ++it) {
-        if (it->has_load && it->art != "overlay" && it->psp == psp) {
-            Set(&event, "modul", Str(it->name));
+        if (it->has_load && it->kind != "overlay" && it->psp == psp) {
+            Set(&event, "module", Str(it->name));
             break;
         }
     }

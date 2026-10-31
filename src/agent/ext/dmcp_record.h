@@ -12,25 +12,25 @@ namespace dmcp {
 
 // --- dmcp_events.cpp ---
 struct EventTypes {
-    bool exec = true, exit = true, int_ = true, int_ret = true, mode = true, new_code_selector = true, datei = true;
+    bool exec = true, exit = true, int_ = true, int_ret = true, mode = true, new_code_selector = true, file = true;
 };
 bool EventsActive();
 // Which event types are switched on; only meaningful while EventsActive().
 const EventTypes& ActiveEventTypes();
 // Incremented by every events.start; recording parts compare it to reset their state lazily.
 uint64_t EventsGeneration();
-// Appends one event (no-op if events are off or the type is filtered). Adds nr, typ, zeit_ms and,
-// if the object has no "adr", the current cs:eip.
-void EmitEvent(const std::string& typ, JsonValue event);
+// Appends one event (no-op if events are off or the type is filtered). Adds nr, type, time_ms and,
+// if the object has no "addr", the current cs:eip.
+void EmitEvent(const std::string& type, JsonValue event);
 uint64_t LastEventNr();
-// int log filter: number/AH/AX rules and int_modus. pm=false for real and v86 mode.
+// int log filter: number/AH/AX rules and int_mode. pm=false for real and v86 mode.
 bool IntWanted(uint8_t num, uint16_t ax, bool pm);
-// events.start mit_rueckgabe: int_ret for every logged interrupt, not only INT 31h.
+// events.start with_return: int_ret for every logged interrupt, not only INT 31h.
 bool IntReturnsWanted();
-// events.start datei_vorschau: bytes of the transferred data in datei events (0 = none).
-uint32_t DateiVorschau();
+// events.start file_preview: bytes of the transferred data in file events (0 = none).
+uint32_t FilePreview();
 // A recording hit its size limit: writes a limit_reached event if events are on.
-void ReportLimit(const std::string& aufzeichnung, const std::string& detail);
+void ReportLimit(const std::string& recording, const std::string& detail);
 
 // From DMCP_OnExec (dmcp_modules.cpp).
 void EventOnExec(const std::string& path, uint16_t flags, bool com, uint16_t psp, uint16_t load_seg,
@@ -46,7 +46,7 @@ void IntsOnInstruction();
 void IntsOnExit(uint16_t psp);
 
 // --- dmcp_fileio.cpp (D34) ---
-// CPU_Interrupt with CPU_INT_SOFTWARE: INT 21h 3Fh/40h on files, emitted as datei when they return.
+// CPU_Interrupt with CPU_INT_SOFTWARE: INT 21h 3Fh/40h on files, emitted as file when they return.
 void FileIoOnSoftwareInterrupt(uint8_t num, uint32_t oldeip);
 bool FileIoOpen();
 void FileIoOnInstruction();

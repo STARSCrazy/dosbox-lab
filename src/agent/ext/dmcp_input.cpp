@@ -224,7 +224,7 @@ void ReleaseAll()
 JsonValue PendingResult()
 {
     JsonValue result = JsonValue::Object();
-    Set(&result, "ausstehend", Num(g_queue.size()));
+    Set(&result, "pending", Num(g_queue.size()));
     return result;
 }
 
@@ -274,13 +274,13 @@ JsonValue MouseStateJson()
     Set(&pos, "x", NumF(v.x));
     Set(&pos, "y", NumF(v.y));
     Set(&result, "int33", pos);
-    Set(&result, "knoepfe", Num(v.buttons));
+    Set(&result, "buttons", Num(v.buttons));
     JsonValue range = JsonValue::Object();
     Set(&range, "min_x", NumF(v.min_x));
     Set(&range, "max_x", NumF(v.max_x));
     Set(&range, "min_y", NumF(v.min_y));
     Set(&range, "max_y", NumF(v.max_y));
-    Set(&result, "bereich", range);
+    Set(&result, "range", range);
     Set(&result, "ps2", Bool(KEYBOARD_AUX_Active() != 0));
     return result;
 }
@@ -297,9 +297,9 @@ bool ParseSignedParam(const JsonValue& params, const std::string& name, double* 
 
 int ButtonIndex(const std::string& name)
 {
-    if (name == "links") return 0;
-    if (name == "rechts") return 1;
-    if (name == "mitte") return 2;
+    if (name == "left") return 0;
+    if (name == "right") return 1;
+    if (name == "middle") return 2;
     return -1;
 }
 
@@ -325,11 +325,11 @@ void RegisterInput()
 {
     Register("input.key", [](const JsonValue& params, JsonValue* result, Error* error) {
         std::string spec;
-        if (!ParamStr(params, "taste", &spec) || spec.empty())
-            return Fail(error, "bad_argument", "parameter taste is required, e.g. \"ENTER\" or \"ALT+X\"");
+        if (!ParamStr(params, "key", &spec) || spec.empty())
+            return Fail(error, "bad_argument", "parameter key is required, e.g. \"ENTER\" or \"ALT+X\"");
         uint64_t hold = 60;
-        if (Param(params, "dauer_ms") != nullptr && (!ParamU64(params, "dauer_ms", &hold) || hold > 10000))
-            return Fail(error, "bad_argument", "dauer_ms must be 0..10000");
+        if (Param(params, "duration_ms") != nullptr && (!ParamU64(params, "duration_ms", &hold) || hold > 10000))
+            return Fail(error, "bad_argument", "duration_ms must be 0..10000");
         std::string upper = spec;
         std::transform(upper.begin(), upper.end(), upper.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
         std::vector<KBD_KEYS> keys;
@@ -360,8 +360,8 @@ void RegisterInput()
         ParamStr(params, "layout", &layout);
         if (layout != "de" && layout != "us")
             return Fail(error, "bad_argument", "layout must be de or us");
-        if (Param(params, "abstand_ms") != nullptr && (!ParamU64(params, "abstand_ms", &gap) || gap > 5000))
-            return Fail(error, "bad_argument", "abstand_ms must be 0..5000");
+        if (Param(params, "gap_ms") != nullptr && (!ParamU64(params, "gap_ms", &gap) || gap > 5000))
+            return Fail(error, "bad_argument", "gap_ms must be 0..5000");
         std::vector<uint32_t> cps;
         if (!DecodeUtf8(text, &cps))
             return Fail(error, "bad_argument", "text is not valid UTF-8");
@@ -383,7 +383,7 @@ void RegisterInput()
             EnqueueCombo(mods, s.key, 30.0, static_cast<double>(gap));
         }
         *result = PendingResult();
-        Set(result, "zeichen", Num(strokes.size()));
+        Set(result, "char", Num(strokes.size()));
         return true;
     });
     Register("input.pending", [](const JsonValue&, JsonValue* result, Error*) {
@@ -397,13 +397,13 @@ void RegisterInput()
     });
     Register("input.mouse_move", [](const JsonValue& params, JsonValue* result, Error* error) {
         double x = 0, y = 0;
-        std::string coords = "spiel";
+        std::string coords = "game";
         if (!ParseSignedParam(params, "x", &x) || !ParseSignedParam(params, "y", &y))
             return Fail(error, "bad_argument", "x and y (numbers) are required");
-        ParamStr(params, "koordinaten", &coords);
+        ParamStr(params, "coords", &coords);
         MouseView v = ReadMouse();
         double tx = x, ty = y;
-        if (coords == "spiel") {
+        if (coords == "game") {
             // Game resolution as the program sees it (mode 13h: 320x200). render.src.height would be 400
             // there (VGA scan doubling), so prefer the INT 10h mode geometry.
             double gw = static_cast<double>(render.src.width), gh = static_cast<double>(render.src.height);
@@ -416,7 +416,7 @@ void RegisterInput()
             tx = v.min_x + x * (v.max_x - v.min_x + 1) / gw;
             ty = v.min_y + y * (v.max_y - v.min_y + 1) / gh;
         } else if (coords != "int33") {
-            return Fail(error, "bad_argument", "koordinaten must be spiel or int33");
+            return Fail(error, "bad_argument", "coords must be game or int33");
         }
         // The driver clamps its position to the range; aiming beyond it would only pile up mickeys.
         const double cx = (std::min)((std::max)(tx, static_cast<double>(v.min_x)), static_cast<double>(v.max_x));
@@ -449,10 +449,10 @@ void RegisterInput()
         JsonValue target = JsonValue::Object();
         Set(&target, "x", NumF(tx));
         Set(&target, "y", NumF(ty));
-        Set(result, "ziel", target);
-        Set(result, "erreicht", Bool(reached));
+        Set(result, "target", target);
+        Set(result, "reached", Bool(reached));
         if (clamped)
-            Set(result, "geklemmt", Bool(true));
+            Set(result, "clamped", Bool(true));
         return true;
     });
     Register("input.mouse_move_rel", [](const JsonValue& params, JsonValue* result, Error* error) {
@@ -467,8 +467,8 @@ void RegisterInput()
     Register("input.mouse_button", [](const JsonValue& params, JsonValue* result, Error* error) {
         std::string name;
         bool pressed = false;
-        if (!ParamStr(params, "knopf", &name) || ButtonIndex(name) < 0 || !ParamBool(params, "gedrueckt", &pressed))
-            return Fail(error, "bad_argument", "knopf (links|rechts|mitte) and gedrueckt (bool) are required");
+        if (!ParamStr(params, "button", &name) || ButtonIndex(name) < 0 || !ParamBool(params, "pressed", &pressed))
+            return Fail(error, "bad_argument", "button (left|right|middle) and pressed (bool) are required");
         const uint8_t button = static_cast<uint8_t>(ButtonIndex(name));
         if (pressed)
             Mouse_ButtonPressed(button);
@@ -479,8 +479,8 @@ void RegisterInput()
     });
     Register("input.mouse_wheel", [](const JsonValue& params, JsonValue* result, Error* error) {
         double steps = 0;
-        if (!ParseSignedParam(params, "schritte", &steps))
-            return Fail(error, "bad_argument", "schritte (number) is required");
+        if (!ParseSignedParam(params, "steps", &steps))
+            return Fail(error, "bad_argument", "steps (number) is required");
         Mouse_WheelMoved(static_cast<int32_t>(steps));
         *result = MouseStateJson();
         return true;
@@ -491,12 +491,12 @@ void RegisterInput()
     });
     Register("input.own", [](const JsonValue& params, JsonValue* result, Error* error) {
         bool on = true;
-        if (!ParamBool(params, "an", &on))
+        if (!ParamBool(params, "on", &on))
             return Fail(error, "bad_argument", "parameter an (bool) is required");
         g_input_owned = on;
         if (!on)
             ReleaseAll(); // handing over: no queued presses or held keys may linger
-        Set(result, "an", Bool(g_input_owned));
+        Set(result, "on", Bool(g_input_owned));
         return true;
     });
 }

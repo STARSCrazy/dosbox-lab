@@ -32,9 +32,9 @@ struct Watch {
     uint32_t length = 0;
     bool read = false;
     bool write = true;
-    bool stop = true;     // aktion "anhalten" (else "protokollieren")
-    std::string quelle;
-    uint64_t treffer = 0;
+    bool stop = true;     // action "halt" (else "log")
+    std::string source;
+    uint64_t hits = 0;
 };
 std::vector<Watch> g_watches;
 uint32_t g_next_id = 1;
@@ -276,7 +276,7 @@ void WatchHandler::Seen(bool write, PhysPt addr, uint8_t width, uint32_t value, 
         const uint64_t w0 = w.start, w1 = static_cast<uint64_t>(w.start) + w.length;
         if (a1 <= w0 || a0 >= w1)
             continue;
-        ++w.treffer;
+        ++w.hits;
         Access access;
         access.nr = ++g_access_nr;
         access.watch = w.id;
@@ -309,24 +309,24 @@ JsonValue AccessJson(const Access& a, bool file_format)
     JsonValue object = JsonValue::Object();
     Set(&object, "nr", Num(a.nr));
     Set(&object, "watch", Num(a.watch));
-    Set(&object, "art", Str(a.write ? "schreiben" : "lesen"));
+    Set(&object, "kind", Str(a.write ? "write" : "read"));
     Address target;
-    target.modus = "linear";
+    target.mode = "linear";
     target.has_linear = true;
     target.linear = a.linear;
     ResolvePhys(&target);
-    JsonValue ziel = AddressJson(target, file_format);
-    AnnotateAddress(target, &ziel, file_format);
-    Set(&object, "ziel", ziel);
-    Set(&object, "breite", Num(a.width));
-    Set(&object, "wert", HexOut(a.value, a.width * 2, file_format));
+    JsonValue target_json = AddressJson(target, file_format);
+    AnnotateAddress(target, &target_json, file_format);
+    Set(&object, "target", target_json);
+    Set(&object, "width", Num(a.width));
+    Set(&object, "value", HexOut(a.value, a.width * 2, file_format));
     if (a.has_old)
-        Set(&object, "alt", HexOut(a.old, a.width * 2, file_format));
+        Set(&object, "old", HexOut(a.old, a.width * 2, file_format));
     const Address at = CodePointAddress(a.at);
-    JsonValue adr = AddressJson(at, file_format);
-    AnnotateAddress(at, &adr, file_format);
-    Set(&object, "adr", adr);
-    Set(&object, "zeit_ms", NumFixed(a.time_ms));
+    JsonValue addr = AddressJson(at, file_format);
+    AnnotateAddress(at, &addr, file_format);
+    Set(&object, "addr", addr);
+    Set(&object, "time_ms", NumFixed(a.time_ms));
     return object;
 }
 
@@ -336,7 +336,7 @@ void Rebuild()
     for (auto& item : g_pages) {
         const uint32_t page = item.first;
         if (paging.tlb.readhandler[page] == &g_handler || paging.tlb.writehandler[page] == &g_handler)
-            PAGING_UnlinkPages(page, 1); // init handler: the next access links the page again
+            PAGING_UnlinkPages(page, 1); // init handler: the next access left the page again
     }
     g_pages.clear();
     for (const Watch& w : g_watches) {
@@ -374,11 +374,11 @@ JsonValue WatchList()
         JsonValue entry = JsonValue::Object();
         Set(&entry, "id", Num(w.id));
         Set(&entry, "start", Hex(w.start, 8));
-        Set(&entry, "laenge", Num(w.length));
-        Set(&entry, "art", Str(w.read && w.write ? "beides" : w.read ? "lesen" : "schreiben"));
-        Set(&entry, "aktion", Str(w.stop ? "anhalten" : "protokollieren"));
-        Set(&entry, "quelle", Str(w.quelle));
-        Set(&entry, "treffer", Num(w.treffer));
+        Set(&entry, "length", Num(w.length));
+        Set(&entry, "kind", Str(w.read && w.write ? "both" : w.read ? "read" : "write"));
+        Set(&entry, "action", Str(w.stop ? "halt" : "log"));
+        Set(&entry, "source", Str(w.source));
+        Set(&entry, "hits", Num(w.hits));
         list.array.push_back(entry);
     }
     return list;
@@ -387,9 +387,9 @@ JsonValue WatchList()
 JsonValue LogInfo()
 {
     JsonValue info = JsonValue::Object();
-    Set(&info, "eintraege", Num(g_log.size()));
+    Set(&info, "entries", Num(g_log.size()));
     Set(&info, "max", Num(g_log_max));
-    Set(&info, "voll", Bool(g_log_full));
+    Set(&info, "full", Bool(g_log_full));
     return info;
 }
 
@@ -424,8 +424,8 @@ void RegisterWatch()
     Register("watch.add", [](const JsonValue& params, JsonValue* result, Error* error) {
         Watch w;
         std::string text;
-        if (!ParamStr(params, "adresse", &text))
-            return Fail(error, "bad_argument", "adresse (string) is required");
+        if (!ParamStr(params, "address", &text))
+            return Fail(error, "bad_argument", "address (string) is required");
         Address address;
         if (!ParseAddress(text, &address, error))
             return false;
@@ -436,42 +436,42 @@ void RegisterWatch()
             if ((cpu.cr0 & 0x80000000u) != 0)
                 return Fail(error, "bad_argument", "physical watches need paging off; watch the linear address");
             w.start = address.phys;
-            hints.array.push_back(Str("p: wird als lineare Adresse beobachtet (Paging aus, linear = physisch)"));
+            hints.array.push_back(Str("p: watched as a linear address (paging off, linear = physical)"));
         }
         uint64_t length = 1;
-        if (Param(params, "laenge") != nullptr && !ParamU64(params, "laenge", &length))
-            return Fail(error, "bad_argument", "laenge must be a number");
+        if (Param(params, "length") != nullptr && !ParamU64(params, "length", &length))
+            return Fail(error, "bad_argument", "length must be a number");
         if (length == 0 || length > kMaxLength || static_cast<uint64_t>(w.start) + length > 0x100000000ull)
-            return Fail(error, "bad_argument", "laenge must be between 1 and 1048576 and stay below 4 GB");
+            return Fail(error, "bad_argument", "length must be between 1 and 1048576 and stay below 4 GB");
         w.length = static_cast<uint32_t>(length);
-        std::string art = "schreiben", aktion = "anhalten";
-        if (Param(params, "art") != nullptr && !ParamStr(params, "art", &art))
-            return Fail(error, "bad_argument", "art must be a string");
-        if (Param(params, "aktion") != nullptr && !ParamStr(params, "aktion", &aktion))
-            return Fail(error, "bad_argument", "aktion must be a string");
-        if (art != "lesen" && art != "schreiben" && art != "beides")
-            return Fail(error, "bad_argument", "art must be lesen, schreiben or beides");
-        if (aktion != "anhalten" && aktion != "protokollieren")
-            return Fail(error, "bad_argument", "aktion must be anhalten or protokollieren");
-        w.read = art != "schreiben";
-        w.write = art != "lesen";
-        w.stop = aktion == "anhalten";
-        w.quelle = text;
+        std::string kind = "write", action = "halt";
+        if (Param(params, "kind") != nullptr && !ParamStr(params, "kind", &kind))
+            return Fail(error, "bad_argument", "kind must be a string");
+        if (Param(params, "action") != nullptr && !ParamStr(params, "action", &action))
+            return Fail(error, "bad_argument", "action must be a string");
+        if (kind != "read" && kind != "write" && kind != "both")
+            return Fail(error, "bad_argument", "kind must be read, write or both");
+        if (action != "halt" && action != "log")
+            return Fail(error, "bad_argument", "action must be halt or log");
+        w.read = kind != "write";
+        w.write = kind != "read";
+        w.stop = action == "halt";
+        w.source = text;
         if (PagesWith(w) > kMaxPages)
             return Fail(error, "bad_argument", "too many watched pages (all watches together: at most 1024)");
         uint32_t phys = 0;
         Error ignored;
         // Paging off maps every linear address to itself, so "mapped" also needs the page to be in guest RAM.
         if (!LinearToPhys(w.start, &phys, &ignored) || !PhysInRam(phys, 1))
-            hints.array.push_back(Str("Seite derzeit nicht eingeblendet; der Waechter greift, sobald sie es ist"));
+            hints.array.push_back(Str("page is not mapped at the moment; the watchpoint takes effect as soon as it is"));
         w.id = g_next_id++;
         g_watches.push_back(w);
         Rebuild();
         Set(result, "id", Num(w.id));
         Set(result, "start", Hex(w.start, 8));
-        Set(result, "laenge", Num(w.length));
-        Set(result, "seiten", Num(((static_cast<uint64_t>(w.start) + w.length - 1) >> 12) - (w.start >> 12) + 1));
-        Set(result, "hinweise", hints);
+        Set(result, "length", Num(w.length));
+        Set(result, "pages", Num(((static_cast<uint64_t>(w.start) + w.length - 1) >> 12) - (w.start >> 12) + 1));
+        Set(result, "hints", hints);
         return true;
     });
     Register("watch.remove", [](const JsonValue& params, JsonValue* result, Error* error) {
@@ -496,31 +496,31 @@ void RegisterWatch()
         if (g_stop_pending && std::none_of(g_watches.begin(), g_watches.end(),
                                            [](const Watch& w) { return w.id == g_stop_access.watch; }))
             g_stop_pending = false;
-        Set(result, "entfernt", Bool(removed));
-        Set(result, "waechter", WatchList());
+        Set(result, "removed", Bool(removed));
+        Set(result, "watchpoint", WatchList());
         return true;
     });
     Register("watch.list", [](const JsonValue&, JsonValue* result, Error*) {
-        Set(result, "waechter", WatchList());
+        Set(result, "watchpoint", WatchList());
         Set(result, "log", LogInfo());
         return true;
     });
     Register("watch.log", [](const JsonValue& params, JsonValue* result, Error* error) {
-        std::string name = "zugriffe";
+        std::string name = "accesses";
         bool clear = false;
         if (Param(params, "name") != nullptr && !ParamStr(params, "name", &name))
             return Fail(error, "bad_argument", "name must be a string");
-        if (Param(params, "leeren") != nullptr && !ParamBool(params, "leeren", &clear))
-            return Fail(error, "bad_argument", "leeren must be true or false");
+        if (Param(params, "clear") != nullptr && !ParamBool(params, "clear", &clear))
+            return Fail(error, "bad_argument", "clear must be true or false");
         std::string body;
         for (const Access& a : g_log)
             body += dosbox_agent::AGENT_SerializeJson(AccessJson(a, true)) + "\n";
         std::string path;
         if (!WriteOutputFile(name + ".jsonl", body.data(), body.size(), &path, error))
             return false;
-        Set(result, "pfad", Str(path));
-        Set(result, "anzahl", Num(g_log.size()));
-        Set(result, "voll", Bool(g_log_full));
+        Set(result, "path", Str(path));
+        Set(result, "count", Num(g_log.size()));
+        Set(result, "full", Bool(g_log_full));
         if (clear) {
             g_log.clear();
             g_log_full = false;
@@ -529,9 +529,9 @@ void RegisterWatch()
     });
     Register("watch.clear_log", [](const JsonValue& params, JsonValue* result, Error* error) {
         uint64_t max = g_log_max;
-        if (Param(params, "max_eintraege") != nullptr &&
-            (!ParamU64(params, "max_eintraege", &max) || max < 1000 || max > 1000000))
-            return Fail(error, "bad_argument", "max_eintraege must be between 1000 and 1000000");
+        if (Param(params, "max_entries") != nullptr &&
+            (!ParamU64(params, "max_entries", &max) || max < 1000 || max > 1000000))
+            return Fail(error, "bad_argument", "max_entries must be between 1000 and 1000000");
         g_log.clear();
         g_log_full = false;
         g_log_max = static_cast<size_t>(max);

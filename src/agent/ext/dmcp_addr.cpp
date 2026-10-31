@@ -141,7 +141,7 @@ bool ParseAddress(const std::string& text, Address* out, Error* error)
     if (text.compare(0, 2, "l:") == 0) {
         if (!ParseHex32(text.substr(2), &a.linear))
             return Fail(error, "bad_argument", "bad linear address: " + text);
-        a.modus = "linear";
+        a.mode = "linear";
         a.has_linear = true;
         ResolvePhys(&a);
         *out = a;
@@ -150,7 +150,7 @@ bool ParseAddress(const std::string& text, Address* out, Error* error)
     if (text.compare(0, 2, "p:") == 0) {
         if (!ParseHex32(text.substr(2), &a.phys))
             return Fail(error, "bad_argument", "bad physical address: " + text);
-        a.modus = "phys";
+        a.mode = "phys";
         a.has_phys = true;
         *out = a;
         return true;
@@ -190,7 +190,7 @@ bool ParseAddress(const std::string& text, Address* out, Error* error)
         if (offset > 0xFFFFu)
             return Fail(error, "bad_argument", force_real ? "real-mode offset must be <= FFFF"
                                                           : "CPU is in v86 mode; offset must be <= FFFF");
-        a.modus = force_real || !cpu.pmode ? "real" : "v86";
+        a.mode = force_real || !cpu.pmode ? "real" : "v86";
         a.base = selector << 4;
         a.bits = 16;
     } else {
@@ -201,7 +201,7 @@ bool ParseAddress(const std::string& text, Address* out, Error* error)
             return Fail(error, "bad_address", "segment not present");
         if (!desc.GetExpandDown() && offset > desc.GetLimit())
             return Fail(error, "bad_address", "offset beyond segment limit");
-        a.modus = "pm";
+        a.mode = "pm";
         a.base = static_cast<uint32_t>(desc.GetBase());
         a.bits = desc.Big() ? 32 : 16;
     }
@@ -225,11 +225,11 @@ void ResolvePhys(Address* address)
 JsonValue AddressJson(const Address& a, bool file_format)
 {
     JsonValue result = JsonValue::Object();
-    Set(&result, "modus", Str(a.modus));
+    Set(&result, "mode", Str(a.mode));
     if (a.has_selector) {
-        Set(&result, a.modus == "pm" ? "sel" : "seg", HexOut(a.selector, 4, file_format));
-        Set(&result, "off", HexOut(a.offset, a.modus == "pm" ? 8 : 4, file_format));
-        Set(&result, "basis", HexOut(a.base, 8, file_format));
+        Set(&result, a.mode == "pm" ? "sel" : "seg", HexOut(a.selector, 4, file_format));
+        Set(&result, "off", HexOut(a.offset, a.mode == "pm" ? 8 : 4, file_format));
+        Set(&result, "base", HexOut(a.base, 8, file_format));
     }
     if (a.has_linear)
         Set(&result, "linear", HexOut(a.linear, 8, file_format));
@@ -313,15 +313,15 @@ CodePoint CurrentCodePoint()
     p.offset = reg_eip;
     p.linear = p.base + reg_eip;
     p.bits = cpu.code.big ? 32 : 16;
-    p.modus = !cpu.pmode ? 0 : (GETFLAG(VM) ? 1 : 2);
+    p.mode = !cpu.pmode ? 0 : (GETFLAG(VM) ? 1 : 2);
     return p;
 }
 
 Address CodePointAddress(const CodePoint& p)
 {
-    static const char* const kModus[] = {"real", "v86", "pm"};
+    static const char* const kMode[] = {"real", "v86", "pm"};
     Address a;
-    a.modus = kModus[p.modus];
+    a.mode = kMode[p.mode];
     a.has_selector = true;
     a.selector = p.selector;
     a.offset = p.offset;
@@ -336,7 +336,7 @@ Address SegCacheAddress(int seg, uint32_t offset)
 {
     const SegNames index = static_cast<SegNames>(seg);
     Address a;
-    a.modus = !cpu.pmode ? "real" : (GETFLAG(VM) ? "v86" : "pm");
+    a.mode = !cpu.pmode ? "real" : (GETFLAG(VM) ? "v86" : "pm");
     a.has_selector = true;
     a.selector = static_cast<uint16_t>(SegValue(index));
     a.offset = offset;

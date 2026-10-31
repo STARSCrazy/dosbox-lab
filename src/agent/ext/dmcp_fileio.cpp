@@ -80,11 +80,11 @@ void Finish(const Access& a)
     FillFlags();
     JsonValue event = a.event;
     if ((reg_flags & FLAG_CF) != 0) {
-        Set(&event, "fehler", HexOut(reg_ax, 4, true));
+        Set(&event, "error", HexOut(reg_ax, 4, true));
     } else {
         const uint32_t done = a.wide ? reg_eax : reg_ax;
-        Set(&event, "ergebnis", HexOut(done, 8, true));
-        const size_t n = std::min<size_t>(done, DateiVorschau());
+        Set(&event, "result", HexOut(done, 8, true));
+        const size_t n = std::min<size_t>(done, FilePreview());
         if (n > 0) {
             std::vector<uint8_t> raw(n);
             RangeList missing;
@@ -94,10 +94,10 @@ void Finish(const Access& a)
                 len = a.buffer.has_linear && r.first >= a.buffer.linear
                           ? std::min<size_t>(len, r.first - a.buffer.linear) : 0;
             if (len > 0)
-                Set(&event, "vorschau", Str(HexBytes(raw.data(), len)));
+                Set(&event, "preview", Str(HexBytes(raw.data(), len)));
         }
     }
-    EmitEvent("datei", event);
+    EmitEvent("file", event);
 }
 
 } // namespace
@@ -105,7 +105,7 @@ void Finish(const Access& a)
 void FileIoOnSoftwareInterrupt(uint8_t num, uint32_t oldeip)
 {
     CheckGeneration();
-    if (num != 0x21 || !ActiveEventTypes().datei)
+    if (num != 0x21 || !ActiveEventTypes().file)
         return;
     const bool pm = InPm();
     if (!pm && SegValue(cs) == CB_SEG)
@@ -133,18 +133,18 @@ void FileIoOnSoftwareInterrupt(uint8_t num, uint32_t oldeip)
     a.wide = pm && cpu.code.big;
     a.buffer = SegCacheAddress(ds, a.wide ? reg_edx : reg_dx);
     JsonValue e = JsonValue::Object();
-    Set(&e, "adr", AddressJson(SegCacheAddress(cs, reg_eip), true));
-    Set(&e, "art", Str(reg_ah == 0x3F ? "lesen" : "schreiben"));
+    Set(&e, "addr", AddressJson(SegCacheAddress(cs, reg_eip), true));
+    Set(&e, "kind", Str(reg_ah == 0x3F ? "read" : "write"));
     Set(&e, "handle", HexOut(handle, 4, true));
     if (file != nullptr && file->IsOpen()) { // a closed handle may still sit in Files[]: no name/seek through it
-        Set(&e, "datei", Str(Printable(file->GetName())));
+        Set(&e, "file", Str(Printable(file->GetName())));
         const uint32_t pos = file->GetSeekPos();
         if (pos != 0xFFFFFFFFu)
             Set(&e, "offset", HexOut(pos, 8, true));
     }
-    Set(&e, "laenge", HexOut(a.wide ? reg_ecx : reg_cx, 8, true));
-    Set(&e, "puffer", AddressJson(a.buffer, true));
-    Set(&e, "modus", Str(!cpu.pmode ? "real" : (GETFLAG(VM) ? "v86" : "pm")));
+    Set(&e, "length", HexOut(a.wide ? reg_ecx : reg_cx, 8, true));
+    Set(&e, "buffer", AddressJson(a.buffer, true));
+    Set(&e, "mode", Str(!cpu.pmode ? "real" : (GETFLAG(VM) ? "v86" : "pm")));
     if (CallsActive()) {
         const uint64_t id = CallsCurrentId();
         if (id != 0)

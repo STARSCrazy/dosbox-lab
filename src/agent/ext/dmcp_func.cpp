@@ -34,14 +34,14 @@ namespace {
 struct Run {
     bool active = false;   // running; the result is measured at the next stop (StopAt)
     bool finished = false; // result is ready
-    std::string zustand, name = "func", art;
+    std::string state, name = "func", kind;
     uint64_t call_id = 0;
     uint16_t psp = 0; // DOS PSP at the start: only this program's end ends the run
     uint16_t ret_sel = 0, ss = 0;
-    uint32_t ret_off = 0, sp_after = 0, esp_ein = 0;
+    uint32_t ret_off = 0, sp_after = 0, esp_in = 0;
     uint64_t max_insn = 10000000, insn = 0;
     bool irqs = false;
-    std::string ende; // set by FuncShouldStop / FuncOnExit before the stop
+    std::string end; // set by FuncShouldStop / FuncOnExit before the stop
     uint32_t min_sp = 0;
     uint32_t ss_base = 0;
     // Other stacks the run uses (INT with stack switch, extender stacks): one area per SS, linear [base+min, base+top).
@@ -57,8 +57,8 @@ struct Run {
     Bitu prev_cpl = 0;
     std::vector<uint8_t> before; // guest RAM at the start (physical)
     std::string stop_reason_override; // state.load ends the run without a stop
-    JsonValue regs_ein, flags_ein, geschrieben;
-    // Software INTs of the run; an open one gets regs_aus at its return point.
+    JsonValue regs_in, flags_in, written;
+    // Software INTs of the run; an open one gets regs_out at its return point.
     JsonValue ints = JsonValue::Array();
     uint64_t ints_dropped = 0;
     struct OpenInt {
@@ -100,33 +100,33 @@ JsonValue FlagsJson()
     return HexOut(static_cast<uint32_t>(reg_flags), 8, true);
 }
 
-const char* EndFromArt(const std::string& art)
+const char* EndFromArt(const std::string& kind)
 {
-    return art == "far" ? "retf" : (art == "int" ? "iret" : "ret");
+    return kind == "far" ? "retf" : (kind == "int" ? "iret" : "ret");
 }
 
-bool ReadAufruf(const JsonValue& sidecar, Run* run, Error* error)
+bool ReadCall(const JsonValue& sidecar, Run* run, Error* error)
 {
-    const JsonValue* a = sidecar.type == JsonType::Object ? Param(sidecar, "aufruf") : nullptr;
+    const JsonValue* a = sidecar.type == JsonType::Object ? Param(sidecar, "call") : nullptr;
     if (a == nullptr || a->type != JsonType::Object)
-        return Fail(error, "bad_argument", "zustand has no aufruf (only states written by calls zustaende work)");
-    const JsonValue* ret = Param(*a, "ruecksprung");
-    uint32_t sel = 0, off = 0, ss_value = 0, sp_after = 0, esp_ein = 0;
+        return Fail(error, "bad_argument", "state has no call (only states written by calls states work)");
+    const JsonValue* ret = Param(*a, "return_address");
+    uint32_t sel = 0, off = 0, ss_value = 0, sp_after = 0, esp_in = 0;
     uint64_t call_id = 0;
     if (ret == nullptr || ret->type != JsonType::Object || !HexField(*ret, "sel", &sel) || !HexField(*ret, "off", &off) ||
-        !HexField(*a, "ss", &ss_value) || !HexField(*a, "esp_nach", &sp_after) || !HexField(*a, "esp_ein", &esp_ein) ||
-        !ParamStr(*a, "art", &run->art) || !ParamU64(*a, "call_id", &call_id))
-        return Fail(error, "bad_argument", "aufruf in the sidecar is incomplete");
+        !HexField(*a, "ss", &ss_value) || !HexField(*a, "esp_after", &sp_after) || !HexField(*a, "esp_in", &esp_in) ||
+        !ParamStr(*a, "kind", &run->kind) || !ParamU64(*a, "call_id", &call_id))
+        return Fail(error, "bad_argument", "call in the sidecar is incomplete");
     run->ret_sel = static_cast<uint16_t>(sel);
     run->ret_off = off;
     run->ss = static_cast<uint16_t>(ss_value);
     run->sp_after = sp_after;
-    run->esp_ein = esp_ein;
+    run->esp_in = esp_in;
     run->call_id = call_id;
     return true;
 }
 
-// regs {name: value}, then stack bytes at SS:ESP, then schreiben [{adresse, hex}]. apply=false only checks the
+// regs {name: value}, then stack bytes at SS:ESP, then write [{address, hex}]. apply=false only checks the
 // form (before the state is loaded); addresses are translated with apply=true, in the loaded state.
 bool ApplyInputs(const JsonValue& params, bool apply, Error* error)
 {
@@ -160,28 +160,28 @@ bool ApplyInputs(const JsonValue& params, bool apply, Error* error)
             return false;
     }
     if (apply)
-        g.geschrieben = JsonValue::Array();
-    if (const JsonValue* list = Param(params, "schreiben")) {
+        g.written = JsonValue::Array();
+    if (const JsonValue* list = Param(params, "write")) {
         if (list->type != JsonType::Array)
-            return Fail(error, "bad_argument", "schreiben must be a list of {adresse, hex}");
+            return Fail(error, "bad_argument", "write must be a list of {address, hex}");
         for (size_t i = 0; i < list->array.size(); ++i) {
             const JsonValue& item = list->array[i];
-            const std::string where = "schreiben[" + std::to_string(i) + "]: ";
+            const std::string where = "write[" + std::to_string(i) + "]: ";
             std::string text, hex;
             std::vector<uint8_t> data;
             Address address;
-            if (item.type != JsonType::Object || !ParamStr(item, "adresse", &text) || !ParamStr(item, "hex", &hex) ||
+            if (item.type != JsonType::Object || !ParamStr(item, "address", &text) || !ParamStr(item, "hex", &hex) ||
                 !FromHex(hex, &data) || data.size() > (16u << 20))
-                return Fail(error, "bad_argument", where + "needs adresse and a non-empty even-length hex string");
+                return Fail(error, "bad_argument", where + "needs address and a non-empty even-length hex string");
             if (!apply)
                 continue;
             Error inner;
             if (!ParseAddress(text, &address, &inner) || !WriteAddress(address, data.data(), data.size(), &inner))
                 return Fail(error, "bad_argument", where + inner.message);
             JsonValue o = JsonValue::Object();
-            Set(&o, "adresse", AddressJson(address, true));
-            Set(&o, "laenge", Num(data.size()));
-            g.geschrieben.array.push_back(o);
+            Set(&o, "address", AddressJson(address, true));
+            Set(&o, "length", Num(data.size()));
+            g.written.array.push_back(o);
         }
     }
     return true;
@@ -316,12 +316,12 @@ void AddLinearRange(uint32_t start, uint32_t stop, std::vector<std::pair<uint32_
     }
 }
 
-// Physical bytes of the stacks: the function's own, linear [ss_base + lowest sp, ss_base + esp_ein), and the used
+// Physical bytes of the stacks: the function's own, linear [ss_base + lowest sp, ss_base + esp_in), and the used
 // part of every other stack of the run.
 std::vector<std::pair<uint32_t, uint32_t>> StackExclusion() // physical [start, end)
 {
     std::vector<std::pair<uint32_t, uint32_t>> out;
-    AddLinearRange(g.ss_base + g.min_sp, g.ss_base + g.esp_ein, &out);
+    AddLinearRange(g.ss_base + g.min_sp, g.ss_base + g.esp_in, &out);
     for (const Run::StackArea& a : g.areas)
         AddLinearRange(a.base + a.min_sp, a.base + a.top, &out);
     return out;
@@ -412,37 +412,37 @@ JsonValue ChangedJson(bool* cut)
         a.has_phys = true;
         a.phys = e.phys;
         if (!e.has_lin) {
-            a.modus = "phys";
+            a.mode = "phys";
         } else {
             a.has_linear = true;
             a.linear = e.lin;
             if (real && e.lin < 0x10FFF0u) {
                 // segment form, so that rel/symbol of 16-bit modules appear; the HMA only as FFFF:offset
-                a.modus = GETFLAG(VM) ? "v86" : "real";
+                a.mode = GETFLAG(VM) ? "v86" : "real";
                 a.has_selector = true;
                 a.selector = e.lin < 0xFFFF0u ? static_cast<uint16_t>(e.lin >> 4) : 0xFFFFu;
                 a.offset = e.lin - (static_cast<uint32_t>(a.selector) << 4);
                 a.base = static_cast<uint32_t>(a.selector) << 4;
             } else {
-                a.modus = "linear";
+                a.mode = "linear";
             }
         }
         JsonValue o = JsonValue::Object();
-        const JsonValue adr = AddressJson(a, true);
-        Set(&o, "adresse", adr);
+        const JsonValue addr = AddressJson(a, true);
+        Set(&o, "address", addr);
         if (!e.more.empty()) {
             JsonValue more = JsonValue::Array();
             for (uint32_t m : e.more)
                 more.array.push_back(HexOut(m, 8, true));
-            Set(&o, "weitere_linear", more);
+            Set(&o, "more_linear", more);
         }
-        if (const JsonValue* sym = Param(adr, "symbol")) {
+        if (const JsonValue* sym = Param(addr, "symbol")) {
             const size_t plus = sym->text.find('+');
             Set(&o, "symbol_offset", Str(plus == std::string::npos ? "0x0" : sym->text.substr(plus + 1)));
         }
-        Set(&o, "laenge", Num(e.len));
-        Set(&o, "vorher", Str(HexUpper(&g.before[e.phys], e.len)));
-        Set(&o, "nachher", Str(HexUpper(MemBase + e.phys, e.len)));
+        Set(&o, "length", Num(e.len));
+        Set(&o, "before", Str(HexUpper(&g.before[e.phys], e.len)));
+        Set(&o, "after", Str(HexUpper(MemBase + e.phys, e.len)));
         list.array.push_back(o);
     }
     return list;
@@ -456,33 +456,33 @@ void Finish()
     DMCP_irq_hold = false;
     JsonValue r = JsonValue::Object();
     Set(&r, "format", Str("dosbox-lab-func/1"));
-    Set(&r, "zustand", Str(g.zustand));
+    Set(&r, "state", Str(g.state));
     Set(&r, "call_id", Num(g.call_id));
-    const std::string ende = g.ende.empty() ? "unterbrochen" : g.ende;
-    Set(&r, "ende", Str(ende));
+    const std::string end = g.end.empty() ? "interrupted" : g.end;
+    Set(&r, "end", Str(end));
     const std::string reason = g.stop_reason_override.empty() ? StopReason() : g.stop_reason_override;
-    Set(&r, "stop_reason", ende == "unterbrochen" ? Str(reason) : JsonValue());
-    Set(&r, "befehle", Num(g.insn));
+    Set(&r, "stop_reason", end == "interrupted" ? Str(reason) : JsonValue());
+    Set(&r, "instructions", Num(g.insn));
     Set(&r, "irqs", Bool(g.irqs));
-    Set(&r, "regs_ein", g.regs_ein);
-    Set(&r, "flags_ein", g.flags_ein);
-    Set(&r, "regs_aus", RegsJson());
-    Set(&r, "flags_aus", FlagsJson());
-    Set(&r, "halt_adr", AddressJson(CodePointAddress(CurrentCodePoint()), true));
-    Set(&r, "geschrieben", g.geschrieben);
+    Set(&r, "regs_in", g.regs_in);
+    Set(&r, "flags_in", g.flags_in);
+    Set(&r, "regs_out", RegsJson());
+    Set(&r, "flags_out", FlagsJson());
+    Set(&r, "halt_addr", AddressJson(CodePointAddress(CurrentCodePoint()), true));
+    Set(&r, "written", g.written);
     CloseStackVisit();
     bool cut = false;
-    Set(&r, "geaendert", ChangedJson(&cut));
-    Set(&r, "geaendert_gekuerzt", Bool(cut));
+    Set(&r, "changed", ChangedJson(&cut));
+    Set(&r, "changed_truncated", Bool(cut));
     g.before.clear();
     g.before.shrink_to_fit();
     Set(&r, "ints", g.ints);
-    Set(&r, "ints_weggelassen", Num(g.ints_dropped));
+    Set(&r, "ints_omitted", Num(g.ints_dropped));
     const std::string text = dosbox_agent::AGENT_SerializeJson(r) + "\n";
     std::string path;
     Error ignored;
     if (WriteOutputFile(g.name + ".json", text.data(), text.size(), &path, &ignored))
-        Set(&r, "pfad", Str(path));
+        Set(&r, "path", Str(path));
     g.result = r;
     g.finished = true;
     UpdateHookActive();
@@ -496,15 +496,15 @@ bool FuncShouldStop()
 {
     if (!g.active)
         return false;
-    if (!g.ende.empty())
+    if (!g.end.empty())
         return true; // decided elsewhere (program end): stop at the next instruction
     if (static_cast<uint16_t>(SegValue(cs)) == g.ret_sel && reg_eip == g.ret_off &&
         static_cast<uint16_t>(SegValue(ss)) == g.ss && CurrentSp() >= g.sp_after) {
-        g.ende = EndFromArt(g.art);
+        g.end = EndFromArt(g.kind);
         return true;
     }
     if (g.insn >= g.max_insn) {
-        g.ende = "abgebrochen";
+        g.end = "aborted";
         return true;
     }
     return false;
@@ -524,8 +524,8 @@ void FuncOnInstruction()
             if (o.cs != sel || o.ret_eip != reg_eip || o.pm != pm)
                 continue;
             JsonValue& e = g.ints.array[o.index];
-            Set(&e, "regs_aus", RegsJson());
-            Set(&e, "flags_aus", FlagsJson());
+            Set(&e, "regs_out", RegsJson());
+            Set(&e, "flags_out", FlagsJson());
             g.open_ints.erase(g.open_ints.begin() + static_cast<long>(i));
             break;
         }
@@ -544,10 +544,10 @@ void FuncOnSoftwareInterrupt(uint8_t num, uint32_t oldeip)
         return;
     }
     JsonValue o = JsonValue::Object();
-    Set(&o, "vektor", HexOut(num, 2, true));
-    Set(&o, "adr", AddressJson(CodePointAddress(CurrentCodePoint()), true));
-    Set(&o, "regs_ein", RegsJson());
-    Set(&o, "flags_ein", FlagsJson());
+    Set(&o, "vector", HexOut(num, 2, true));
+    Set(&o, "addr", AddressJson(CodePointAddress(CurrentCodePoint()), true));
+    Set(&o, "regs_in", RegsJson());
+    Set(&o, "flags_in", FlagsJson());
     g.ints.array.push_back(o);
     g.open_ints.push_back({static_cast<uint16_t>(SegValue(cs)), oldeip, pm, g.ints.array.size() - 1});
 }
@@ -557,15 +557,15 @@ void FuncOnStop() { Finish(); }
 void FuncOnExit(uint16_t psp)
 {
     // Only the program the function belongs to; a child started by the function may end on its own.
-    if (g.active && g.ende.empty() && psp == g.psp)
-        g.ende = "programmende";
+    if (g.active && g.end.empty() && psp == g.psp)
+        g.end = "program_end";
 }
 
 void FuncOnStateLoad()
 {
     if (!g.active)
         return;
-    g.ende = "unterbrochen";
+    g.end = "interrupted";
     g.stop_reason_override = "state_load";
     g.before.clear(); // the comparison would compare two unrelated machine states
     Finish();
@@ -579,31 +579,31 @@ void RegisterFunc()
         const std::string core = cpu_section != nullptr ? cpu_section->Get_string("core") : "";
         if (core != "normal")
             return Fail(error, "bad_argument", "func.start needs core=normal (configured: core=" + core + ")");
-        std::string zustand, name = "func";
-        if (!ParamStr(params, "zustand", &zustand) || zustand.empty())
-            return Fail(error, "bad_argument", "zustand (path of a .sav written by calls zustaende) is required");
+        std::string state, name = "func";
+        if (!ParamStr(params, "state", &state) || state.empty())
+            return Fail(error, "bad_argument", "state (path of a .sav written by calls states) is required");
         if (Param(params, "name") != nullptr &&
             (!ParamStr(params, "name", &name) || name.empty() || name.find_first_of("\\/:*?\"<>|") != std::string::npos))
             return Fail(error, "bad_argument", "name must be a plain file name without path characters");
         uint64_t max_insn = 10000000;
-        if (Param(params, "max_befehle") != nullptr && (!ParamU64(params, "max_befehle", &max_insn) || max_insn == 0))
-            return Fail(error, "bad_argument", "max_befehle must be at least 1");
+        if (Param(params, "max_instructions") != nullptr && (!ParamU64(params, "max_instructions", &max_insn) || max_insn == 0))
+            return Fail(error, "bad_argument", "max_instructions must be at least 1");
         bool irqs = false;
         if (Param(params, "irqs") != nullptr && !ParamBool(params, "irqs", &irqs))
             return Fail(error, "bad_argument", "irqs must be true or false");
         // Check everything that does not need the loaded state first: a refused call leaves the machine alone.
         Run next;
         JsonValue sidecar;
-        if (!ReadStateSidecar(zustand, &sidecar))
-            return Fail(error, "bad_argument", "zustand has no readable sidecar (.json) with aufruf: " + zustand);
-        if (!ReadAufruf(sidecar, &next, error) || !ApplyInputs(params, false, error))
+        if (!ReadStateSidecar(state, &sidecar))
+            return Fail(error, "bad_argument", "state has no readable sidecar (.json) with call: " + state);
+        if (!ReadCall(sidecar, &next, error) || !ApplyInputs(params, false, error))
             return false;
         // An old run ends here (its result is dropped), then the state is loaded.
         g.active = false;
         g.finished = false;
         DMCP_irq_hold = false;
         UpdateHookActive();
-        if (!LoadStateFile(zustand, false, &sidecar, error))
+        if (!LoadStateFile(state, false, &sidecar, error))
             return false;
         g = next;
         if (!ApplyInputs(params, true, error)) {
@@ -611,7 +611,7 @@ void RegisterFunc()
             return false;
         }
         g.psp = dos.psp();
-        g.zustand = zustand;
+        g.state = state;
         g.name = name;
         g.max_insn = max_insn;
         g.irqs = irqs;
@@ -619,15 +619,15 @@ void RegisterFunc()
         g.cur_ss = g.ss;
         g.cur_base = static_cast<uint32_t>(SegPhys(ss));
         g.prev_cpl = cpu.cpl;
-        g.regs_ein = RegsJson();
-        g.flags_ein = FlagsJson();
+        g.regs_in = RegsJson();
+        g.flags_in = FlagsJson();
         g.ss_base = static_cast<uint32_t>(SegPhys(ss));
         g.before.assign(MemBase, MemBase + static_cast<size_t>(GuestRamBytes()));
         DMCP_irq_hold = !irqs;
         g.active = true;
         UpdateHookActive();
         Resume(); // like emu.continue; a running emulator just keeps running
-        Set(result, "laeuft", Bool(true));
+        Set(result, "running", Bool(true));
         return true;
     });
     Register("func.result", [](const JsonValue&, JsonValue* result, Error*) {
@@ -635,7 +635,7 @@ void RegisterFunc()
             *result = g.result;
             return true;
         }
-        Set(result, "laeuft", Bool(g.active));
+        Set(result, "running", Bool(g.active));
         return true;
     });
 }
