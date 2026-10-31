@@ -5,11 +5,11 @@ from tests.util import class_box, need_build, prog_psp, start_prog
 
 
 class DebugProg:
-    def adr(self, off):
+    def addr(self, off):
         return f"r:{self.psp:04X}:{off:04X}"
 
     def word(self, off):
-        return int.from_bytes(self.box.mem_read(self.adr(off), 2), "little")
+        return int.from_bytes(self.box.mem_read(self.addr(off), 2), "little")
 
 
 @need_build
@@ -25,7 +25,7 @@ class StepOverTest(unittest.TestCase, DebugProg):
             self.box.resume()
 
     def test_step_over_call(self):
-        self.box.run_until(adresse=self.adr(0x107))
+        self.box.run_until(address=self.addr(0x107))
         calls = self.word(0x182)
         st = self.box.step_over()
         self.assertEqual(st["stop_reason"], "step_over")
@@ -33,16 +33,16 @@ class StepOverTest(unittest.TestCase, DebugProg):
         self.assertEqual(self.word(0x182), (calls + 1) & 0xFFFF)
 
     def test_step_over_int(self):
-        self.box.run_until(adresse=self.adr(0x113))
+        self.box.run_until(address=self.addr(0x113))
         st = self.box.step_over()
         self.assertEqual(st["stop_reason"], "step_over")
         self.assertEqual(int(st["eip"], 16), 0x115)
         self.assertEqual(int(st["cs"], 16), self.psp)
 
     def test_plain_instruction_is_single_step(self):
-        self.box.run_until(adresse=self.adr(0x10A))
+        self.box.run_until(address=self.addr(0x10A))
         st = self.box.step_over()
-        self.assertEqual(st["art"], "schritt")
+        self.assertEqual(st["kind"], "step")
         self.assertEqual(st["stop_reason"], "step")
         self.assertEqual(int(st["eip"], 16), 0x10D)
 
@@ -53,33 +53,33 @@ class StepOverTest(unittest.TestCase, DebugProg):
 
     def test_frame_step(self):
         st = self.box.pause()
-        before = float(st["zeit_ms"])
+        before = float(st["time_ms"])
         st = self.box.frame_step(10)
         self.assertTrue(st["paused"])
         self.assertEqual(st["stop_reason"], "frame")
-        self.assertGreater(float(st["zeit_ms"]) - before, 50.0)
-        self.assertLess(float(st["zeit_ms"]) - before, 1000.0)
+        self.assertGreater(float(st["time_ms"]) - before, 50.0)
+        self.assertLess(float(st["time_ms"]) - before, 1000.0)
 
     def test_run_until_after_step_on_breakpoint(self):
-        # E4: run_until aus dem Halt nach einem Schritt fuehrt mindestens einen Befehl aus, auch wenn am
-        # aktuellen Befehl ein Haltepunkt sitzt.
-        self.box.run_until(adresse=self.adr(0x10A))
+        # E4: run_until from the halt after a step executes at least one instruction, even if a breakpoint
+        # sits on the current instruction.
+        self.box.run_until(address=self.addr(0x10A))
         st = self.box.step()
         self.assertEqual(int(st["eip"], 16), 0x10D)
-        self.box.break_add(self.adr(0x10D))
+        self.box.break_add(self.addr(0x10D))
         try:
-            st = self.box.run_until(adresse=self.adr(0x140))
+            st = self.box.run_until(address=self.addr(0x140))
             self.assertEqual(st["stop_reason"], "run_until")
             self.assertEqual(int(st["eip"], 16), 0x140)
-            self.assertEqual(self.box.break_list()["eintraege"][0]["treffer"], 0)
+            self.assertEqual(self.box.break_list()["entries"][0]["hits"], 0)
         finally:
             self.box.break_remove(all=True)
 
     def test_step_over_after_step_on_breakpoint(self):
-        self.box.run_until(adresse=self.adr(0x115))
-        st = self.box.step()  # jz schleife (keine Taste) -> 0107
+        self.box.run_until(address=self.addr(0x115))
+        st = self.box.step()  # jz loop (no key) -> 0107
         self.assertEqual(int(st["eip"], 16), 0x107)
-        self.box.break_add(self.adr(0x107))
+        self.box.break_add(self.addr(0x107))
         try:
             st = self.box.step_over()
             self.assertEqual(st["stop_reason"], "step_over")
@@ -103,7 +103,7 @@ class StepOverTest(unittest.TestCase, DebugProg):
 
 @need_build
 class StepOverEndTest(unittest.TestCase, DebugProg):
-    """step_over ueber INT 21h/4Ch: kehrt nie zurueck -> timeout, Bedingung entschaerft, Emulator laeuft."""
+    """step_over across INT 21h/4Ch: never returns -> timeout, condition disarmed, emulator running."""
 
     @classmethod
     def setUpClass(cls):
@@ -113,7 +113,7 @@ class StepOverEndTest(unittest.TestCase, DebugProg):
 
     def test_step_over_never_returns(self):
         self.box.key("ESC")
-        st = self.box.run_until(adresse=self.adr(0x122))
+        st = self.box.run_until(address=self.addr(0x122))
         self.assertEqual(int(st["eip"], 16), 0x122)
         self.assertEqual(int(self.box.registers()["gp"]["eax"], 16) & 0xFFFF, 0x4C07)
         with self.assertRaises(DmcpError) as ctx:
@@ -121,4 +121,4 @@ class StepOverEndTest(unittest.TestCase, DebugProg):
         self.assertEqual(ctx.exception.code, "timeout")
         st = self.box.status()
         self.assertFalse(st["paused"])
-        self.assertNotIn("wartet_auf", st)
+        self.assertNotIn("waiting_for", st)

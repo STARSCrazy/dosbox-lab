@@ -13,7 +13,7 @@ class ClassBoxTest(unittest.TestCase):
             @classmethod
             def setUpClass(cls):
                 cls.box = class_box(cls, start_idle())
-                raise RuntimeError("setUpClass scheitert absichtlich")
+                raise RuntimeError("setUpClass fails on purpose")
 
             def test_nothing(self):
                 pass

@@ -18,7 +18,7 @@ class PingTest(unittest.TestCase):
     def test_unknown_method_is_rpc_error(self):
         box = start_prog("MEMTEST.COM")
         try:
-            for method in ("dmcp.gibtsnicht", "emu.gibtsnicht", "cpu.x", "mem.x", "input.x", "screen.x"):
+            for method in ("dmcp.doesnotexist", "emu.doesnotexist", "cpu.x", "mem.x", "input.x", "screen.x"):
                 with self.assertRaises(DmcpError) as ctx:
                     box.call(method)
                 self.assertEqual(ctx.exception.code, "bad_argument", method)

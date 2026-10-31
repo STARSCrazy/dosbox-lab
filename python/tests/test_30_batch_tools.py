@@ -18,22 +18,23 @@ class BatchToolsTest(unittest.TestCase):
                                "--timeout", "30"], cwd=PYDIR, capture_output=True, text=True, timeout=90)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         result = json.loads(proc.stdout)
-        self.assertEqual((result["status"], result["exit_code"]), ("fertig", 7))
+        self.assertEqual((result["status"], result["exit_code"]), ("done", 7))
 
     def test_cli_batch_bad_argument(self):
         proc = subprocess.run([sys.executable, "-m", "dosbox_lab", "batch", "--dir", str(TESTPROGS), "--cmd", " "],
                               cwd=PYDIR, capture_output=True, text=True, timeout=60)
         self.assertEqual(proc.returncode, 1)
-        self.assertEqual(json.loads(proc.stdout)["fehler"], "bad_argument")
+        self.assertEqual(json.loads(proc.stdout)["error"], "bad_argument")
 
     def test_mcp_tool_with_cdrom_d(self):
         work = batch_workdir(self)
-        result = mcp_server.run_batch(laufwerk_c=str(work), befehl="D:\\EXITCODE", timeout_s=30,
-                                      laufwerk_d=str(TESTPROGS), cdrom_d=True)
-        self.assertEqual((result["status"], result["exit_code"]), ("fertig", 0x2A))
+        result = mcp_server.run_batch(drive_c=str(work), command="D:\\EXITCODE", timeout_s=30,
+                                      drive_d=str(TESTPROGS), cdrom_d=True)
+        self.assertEqual((result["status"], result["exit_code"]), ("done", 0x2A))
+        # TESTPROG-TEXT (EXITCODE.COM)
         self.assertEqual(result["stdout_text"], "EXITCODE stdout\r\n")
         self.assertEqual(result["stderr_text"], "EXITCODE stderr\r\n")
-        self.assertEqual(result["dateien"], [])  # D: ist CD (nicht verglichen), C: unveraendert
+        self.assertEqual(result["files"], [])  # D: is a CD (not compared), C: unchanged
 
 
 if __name__ == "__main__":

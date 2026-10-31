@@ -14,15 +14,15 @@ class SnapshotTest(unittest.TestCase):
         wait_until(lambda: cls.box.registers()["paging"], timeout=15)
         wait_until(lambda: cls.box.mem_read("l:01000000", 4) == b"DMCP")
         cls.box.set_segments("PMODE.COM", [
-            {"name": "daten", "va_start": "0x0", "va_ende": "0x1FFF", "basis_linear": "0x01000000"}])
-        cls.snap = cls.box.snapshot("nach start", mit_erweiterung=True)
-        cls.dir = Path(cls.snap["pfad"])
+            {"name": "data", "va_start": "0x0", "va_end": "0x1FFF", "base_linear": "0x01000000"}])
+        cls.snap = cls.box.snapshot("to start", with_extension=True)
+        cls.dir = Path(cls.snap["path"])
         cls.meta = json.loads((cls.dir / "meta.json").read_text(encoding="utf-8"))
 
 
     def test_directory_and_files(self):
         self.assertTrue(self.dir.name.startswith("snapshot_"))
-        self.assertTrue(self.dir.name.endswith("_nach_start"))
+        self.assertTrue(self.dir.name.endswith("_to_start"))
         for name in ("mem_conv.bin", "mem_conv.json", "mem_lin_01000000.bin", "mem_lin_01000000.json",
                      "mem_phys_ext.bin", "regs.json", "descriptors.json", "paging.json", "video.json", "meta.json"):
             self.assertTrue((self.dir / name).exists(), name)
@@ -36,31 +36,31 @@ class SnapshotTest(unittest.TestCase):
 
     def test_meta(self):
         self.assertEqual(self.meta["format"], "dosbox-lab-snapshot/1")
-        self.assertEqual(self.meta["label"], "nach start")
-        self.assertFalse(self.meta["pausiert_vorher"])
-        self.assertEqual(self.meta["bereiche"][0]["start"], "0x01000000")
-        self.assertEqual(self.meta["bereiche"][0]["ende"], "0x01002000")
-        for name, digest in self.meta["dateien"].items():
+        self.assertEqual(self.meta["label"], "to start")
+        self.assertFalse(self.meta["paused_before"])
+        self.assertEqual(self.meta["ranges"][0]["start"], "0x01000000")
+        self.assertEqual(self.meta["ranges"][0]["end"], "0x01002000")
+        for name, digest in self.meta["files"].items():
             self.assertEqual(hashlib.sha256((self.dir / name).read_bytes()).hexdigest(), digest, name)
 
     def test_paging_and_registers(self):
         paging = json.loads((self.dir / "paging.json").read_text(encoding="utf-8"))
         self.assertTrue(paging["paging"])
         self.assertEqual(paging["cr3"], "00300000")
-        self.assertEqual(paging["bereiche"][0]["seiten"][0]["phys"], "00200000")
+        self.assertEqual(paging["ranges"][0]["pages"][0]["phys"], "00200000")
         regs = json.loads((self.dir / "regs.json").read_text(encoding="utf-8"))
-        self.assertEqual(regs["modus"], "pm")
+        self.assertEqual(regs["mode"], "pm")
 
     def test_emulator_runs_again(self):
         self.assertFalse(self.box.status()["paused"])
 
     def test_no_hint_in_pm(self):
-        self.assertNotIn("hinweise", self.snap)
+        self.assertNotIn("hints", self.snap)
 
 
 @need_build
 class SnapshotModeTest(unittest.TestCase):
-    """Extender stehen oft im Real Mode: snapshot(bis="pmode") haelt erst im Protected Mode an (Abnahme an einem DOS-Extender-Programm)."""
+    """Extenders are often in real mode: snapshot(until="pmode") halts only in protected mode (acceptance with a DOS extender program)."""
 
     def setUp(self):
         self.box = start_idle()
@@ -69,23 +69,23 @@ class SnapshotModeTest(unittest.TestCase):
         self.box.stop()
 
     def test_until_pmode(self):
-        run_typed(self.box, "PMODE")  # Tastenfolge laeuft in emulierter Zeit; der Gast steht noch am Prompt
-        snap = self.box.snapshot("pm", bis="pmode")
-        meta = json.loads((Path(snap["pfad"]) / "meta.json").read_text(encoding="utf-8"))
+        run_typed(self.box, "PMODE")  # the key sequence runs in emulated time; the guest is still at the prompt
+        snap = self.box.snapshot("pm", until="pmode")
+        meta = json.loads((Path(snap["path"]) / "meta.json").read_text(encoding="utf-8"))
         self.assertTrue(meta["status"]["pmode"])
         self.assertEqual(meta["status"]["stop_reason"], "pmode")
         self.assertFalse(self.box.status()["paused"])
 
     def test_hint_when_linear_ranges_unreachable(self):
         run_typed(self.box, "FLOW")
-        wait_until(lambda: any(m["modul"] == "FLOW.COM" for m in self.box.modules()), timeout=15)
+        wait_until(lambda: any(m["module"] == "FLOW.COM" for m in self.box.modules()), timeout=15)
         self.box.set_segments("FLOW.COM", [
-            {"name": "hoch", "va_start": "0x0", "va_ende": "0xFFF", "basis_linear": "0x02000000"}])
+            {"name": "up", "va_start": "0x0", "va_end": "0xFFF", "base_linear": "0x02000000"}])
         snap = self.box.snapshot("real")
-        self.assertEqual(len(snap["hinweise"]), 1)
-        self.assertIn("bis=\"pmode\"", snap["hinweise"][0])
-        meta = json.loads((Path(snap["pfad"]) / "meta.json").read_text(encoding="utf-8"))
-        self.assertEqual(meta["hinweise"], snap["hinweise"])
+        self.assertEqual(len(snap["hints"]), 1)
+        self.assertIn("until=\"pmode\"", snap["hints"][0])
+        meta = json.loads((Path(snap["path"]) / "meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(meta["hints"], snap["hints"])
 
 
 if __name__ == "__main__":
@@ -93,21 +93,21 @@ if __name__ == "__main__":
 
 
 class SnapshotUnitTest(unittest.TestCase):
-    """Ohne Emulator: Bereichsstuecke (B7) und Nummernvergabe (B13)."""
+    """Without an emulator: range pieces (B7) and numbering (B13)."""
 
     def test_overlapping_big_segments_split_into_64mb_pieces(self):
-        from dosbox_lab.snapshot import MAX_BEREICH, _stuecke
+        from dosbox_lab.snapshot import MAX_RANGE, _pieces
         mb = 1 << 20
         found = [(0x1000000, 0x1000000 + 48 * mb, "A", "a"), (0x1000000 + 24 * mb, 0x1000000 + 72 * mb, "B", "b")]
-        pieces = _stuecke(found)
+        pieces = _pieces(found)
         self.assertGreater(len(pieces), 1)
         self.assertEqual(pieces[0]["start"], 0x1000000)
-        self.assertEqual(pieces[-1]["ende"], 0x1000000 + 72 * mb)
+        self.assertEqual(pieces[-1]["end"], 0x1000000 + 72 * mb)
         for p in pieces:
-            self.assertLessEqual(p["ende"] - p["start"], MAX_BEREICH)
-            self.assertGreater(p["ende"], p["start"])
+            self.assertLessEqual(p["end"] - p["start"], MAX_RANGE)
+            self.assertGreater(p["end"], p["start"])
         for a, b in zip(pieces, pieces[1:]):
-            self.assertEqual(a["ende"], b["start"])
+            self.assertEqual(a["end"], b["start"])
 
     def test_number_is_highest_plus_one(self):
         import tempfile

@@ -25,26 +25,26 @@ class CliTest(unittest.TestCase):
             def search():
                 code, hits = cli("search", "l:0", "A0000", "--text", "DMCP-MEMTEST-MARK", "--id", inst)
                 self.assertEqual(code, 0)
-                return hits["treffer"]
+                return hits["hits"]
 
-            # MEMTEST laeuft asynchron an: auf den Marker warten statt sofort zu suchen
+            # MEMTEST starts asynchronously: wait for the marker instead of searching right away
             wait_until(search, timeout=15, interval=0.3)
             code, regs = cli("regs", "--id", inst)
-            self.assertEqual(regs["modus"], "real")
+            self.assertEqual(regs["mode"], "real")
             code, err = cli("read", "zz:1", "4", "--id", inst)
             self.assertEqual(code, 1)
-            self.assertEqual(err["fehler"], "bad_argument")
-            for bad in (("call", "emu.status", "{kaputt"), ("call", "emu.status", "[1, 2]"),
+            self.assertEqual(err["error"], "bad_argument")
+            for bad in (("call", "emu.status", "{broken"), ("call", "emu.status", "[1, 2]"),
                         ("write", "l:4F0", "ZZ"), ("shot", "x", "--rect", "1,2")):
                 code, err = cli(*bad, "--id", inst)
                 self.assertEqual(code, 1, bad)
-                self.assertEqual(err["fehler"], "bad_argument", bad)
+                self.assertEqual(err["error"], "bad_argument", bad)
             code, mods = cli("modules", "--id", inst)
             self.assertEqual(code, 0, mods)
-            self.assertIn("MEMTEST.COM", [m["modul"] for m in mods["module"]])
-            code, started_ev = cli("events-start", "--int", "21:3D", "--rueckgabe", "--id", inst)
+            self.assertIn("MEMTEST.COM", [m["module"] for m in mods["modules"]])
+            code, started_ev = cli("events-start", "--int", "21:3D", "--with-return", "--id", inst)
             self.assertEqual(code, 0, started_ev)
-            self.assertTrue(started_ev["aktiv"])
+            self.assertTrue(started_ev["active"])
             code, read = cli("events-read", "--id", inst)
             self.assertEqual(code, 0, read)
             code, _ = cli("events-stop", "--id", inst)
@@ -53,11 +53,11 @@ class CliTest(unittest.TestCase):
             self.assertEqual(code, 0, cov)
             code, saved = cli("cov-save", "cli_cov", "--id", inst)
             self.assertEqual(code, 0, saved)
-            self.assertIn("hits_pfad", saved)
+            self.assertIn("hits_path", saved)
             code, err = cli("events-start", "--int", "zz", "--id", inst)
-            self.assertEqual((code, err["fehler"]), (1, "bad_argument"))
+            self.assertEqual((code, err["error"]), (1, "bad_argument"))
             code, listing = cli("list")
-            self.assertIn(inst, [i["id"] for i in listing["instanzen"]])
+            self.assertIn(inst, [i["id"] for i in listing["instances"]])
         finally:
             cli("stop", "--id", inst)
 
@@ -66,17 +66,17 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 0, started)
         inst = started["id"]
         try:
-            code, r = cli("calls-start", "--ziel", "l:00001000", "--bereich", "l:2000", "l:20FF", "--int", "21:3F",
-                          "--stack", "16", "--max-je-ziel", "5", "--name", "calls_cli", "--id", inst)
+            code, r = cli("calls-start", "--target", "l:00001000", "--range", "l:2000", "l:20FF", "--int", "21:3F",
+                          "--stack", "16", "--max-per-target", "5", "--name", "calls_cli", "--id", inst)
             self.assertEqual(code, 0, r)
-            self.assertTrue(r["aktiv"])
+            self.assertTrue(r["active"])
             code, r = cli("calls-status", "--id", inst)
-            self.assertTrue(r["aktiv"])
+            self.assertTrue(r["active"])
             code, r = cli("calls-stop", "--id", inst)
             self.assertEqual(code, 0, r)
-            self.assertFalse(r["aktiv"])
-            self.assertTrue(r["json_pfad"].endswith("calls_cli.json"))
-            code, r = cli("events-start", "--vorschau", "8", "--typ", "datei", "--id", inst)
+            self.assertFalse(r["active"])
+            self.assertTrue(r["json_path"].endswith("calls_cli.json"))
+            code, r = cli("events-start", "--preview", "8", "--type", "file", "--id", inst)
             self.assertEqual(code, 0, r)
             cli("events-stop", "--id", inst)
         finally:
@@ -89,14 +89,14 @@ class CliTest(unittest.TestCase):
         try:
             def loaded():
                 code, mods = cli("modules", "--id", inst)
-                return any(m["modul"] == "DEBUG.COM" and "psp" in m for m in mods["module"])
+                return any(m["module"] == "DEBUG.COM" and "psp" in m for m in mods["modules"])
 
             wait_until(loaded, timeout=15, interval=0.3)
-            code, st = cli("until", "--adresse", "rel:DEBUG.COM:0000:010A", "--id", inst)
+            code, st = cli("until", "--address", "rel:DEBUG.COM:0000:010A", "--id", inst)
             self.assertEqual(code, 0, st)
-            code, dis = cli("dis", "--anzahl", "2", "--id", inst)
+            code, dis = cli("dis", "--count", "2", "--id", inst)
             self.assertEqual(code, 0, dis)
-            self.assertEqual(len(dis["zeilen"]), 2)
+            self.assertEqual(len(dis["lines"]), 2)
             code, ev = cli("eval", "ip", "--id", inst)
             self.assertEqual(code, 0, ev)
             code, tgt = cli("dos", "target", "--id", inst)
@@ -105,7 +105,7 @@ class CliTest(unittest.TestCase):
             self.assertEqual(code, 0, brk)
             code, lst = cli("break-list", "--id", inst)
             self.assertEqual(code, 0, lst)
-            code, rm = cli("unbreak", "--alle", "--id", inst)
+            code, rm = cli("unbreak", "--all", "--id", inst)
             self.assertEqual(code, 0, rm)
         finally:
             cli("stop", "--id", inst)
@@ -118,12 +118,12 @@ class CliTest(unittest.TestCase):
         try:
             def func_module():
                 _, mods = cli("modules", "--id", inst)
-                return next((m for m in (mods or {}).get("module", []) if m["modul"] == "FUNC.COM" and "psp" in m),
+                return next((m for m in (mods or {}).get("modules", []) if m["module"] == "FUNC.COM" and "psp" in m),
                             None)
             psp = int(wait_until(func_module, timeout=20)["psp"], 16)
             base = psp * 16
-            code, r = cli("calls-start", "--bereich", f"l:{base + 0x200:08X}", f"l:{base + 0x2FF:08X}",
-                          "--zustaende", "1", "--name", "fcli", "--id", inst)
+            code, r = cli("calls-start", "--range", f"l:{base + 0x200:08X}", f"l:{base + 0x2FF:08X}",
+                          "--states", "1", "--name", "fcli", "--id", inst)
             self.assertEqual(code, 0, r)
             code, r = cli("write", f"r:{psp:04X}:03F1", "01", "--id", inst)
             self.assertEqual(code, 0, r)
@@ -131,16 +131,16 @@ class CliTest(unittest.TestCase):
                        timeout=30, interval=0.2)
             code, r = cli("calls-stop", "--id", inst)
             self.assertEqual(code, 0, r)
-            e = next(x for x in read_jsonl(r["datei"]) if "zustand" in x and int(x["ziel"]["linear"], 16) == base + 0x200)
-            code, r = cli("func-run", "--zustand", e["zustand"], "--schreiben", f"l:{base + 0x200:08X}=B82A00C3",
+            e = next(x for x in read_jsonl(r["file"]) if "state" in x and int(x["target"]["linear"], 16) == base + 0x200)
+            code, r = cli("func-run", "--state", e["state"], "--write", f"l:{base + 0x200:08X}=B82A00C3",
                           "--reg", "ebx=0x5", "--id", inst)
             self.assertEqual(code, 0, r)
-            self.assertEqual(r["ende"], "ret")
-            self.assertEqual(int(r["regs_aus"]["eax"], 16) & 0xFFFF, 0x2A)
-            self.assertEqual(int(r["regs_ein"]["ebx"], 16), 5)
-            code, r = cli("func-run", "--zustand", e["zustand"], "--reg", "ebx", "--id", inst)
+            self.assertEqual(r["end"], "ret")
+            self.assertEqual(int(r["regs_out"]["eax"], 16) & 0xFFFF, 0x2A)
+            self.assertEqual(int(r["regs_in"]["ebx"], 16), 5)
+            code, r = cli("func-run", "--state", e["state"], "--reg", "ebx", "--id", inst)
             self.assertNotEqual(code, 0)
-            self.assertEqual(r["fehler"], "bad_argument")
+            self.assertEqual(r["error"], "bad_argument")
         finally:
             cli("stop", "--id", inst)
 

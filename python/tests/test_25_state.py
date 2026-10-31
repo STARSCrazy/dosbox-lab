@@ -20,140 +20,140 @@ class StateTest(unittest.TestCase):
         if self.box.status()["paused"]:
             self.box.resume()
 
-    def adr(self, off):
+    def addr(self, off):
         return f"r:{self.psp:04X}:{off:04X}"
 
-    def wert(self):
-        return int.from_bytes(self.box.mem_read(self.adr(0x180), 2), "little")
+    def value(self):
+        return int.from_bytes(self.box.mem_read(self.addr(0x180), 2), "little")
 
     def test_save_and_load_restores(self):
-        self.box.run_until(adresse=self.adr(0x10A))
-        saved = self.wert()
+        self.box.run_until(address=self.addr(0x10A))
+        saved = self.value()
         info = self.box.state_save("st_debug")
-        self.assertTrue(Path(info["pfad"]).exists())
-        self.assertGreater(info["groesse"], 0)
-        meta = json.loads(Path(info["info_pfad"]).read_text(encoding="utf-8"))
+        self.assertTrue(Path(info["path"]).exists())
+        self.assertGreater(info["size"], 0)
+        meta = json.loads(Path(info["info_path"]).read_text(encoding="utf-8"))
         self.assertEqual(meta["format"], "dosbox-lab-state/1")
         self.box.resume()
-        wait_until(lambda: (self.wert() - saved) & 0xFFFF >= 3, timeout=15)
+        wait_until(lambda: (self.value() - saved) & 0xFFFF >= 3, timeout=15)
         self.box.pause()
         result = self.box.state_load("st_debug")
-        self.assertTrue(result["geladen"])
-        self.assertEqual(self.wert(), saved)
+        self.assertTrue(result["loaded"])
+        self.assertEqual(self.value(), saved)
         regs = self.box.registers()
         self.assertEqual(int(regs["gp"]["eip"], 16), 0x10A)
         self.box.resume()
-        wait_until(lambda: self.wert() != saved, timeout=15)
+        wait_until(lambda: self.value() != saved, timeout=15)
 
     def test_load_missing(self):
         with self.assertRaises(DmcpError) as ctx:
             self.box.state_load("gibtsnicht")
         self.assertEqual(ctx.exception.code, "bad_argument")
-        self.assertIn("paused", self.box.status())  # kein Dialog: Emulator antwortet
+        self.assertIn("paused", self.box.status())  # no dialog: the emulator answers
 
     def test_load_not_a_savestate(self):
-        (self.out / "kaputt.sav").write_bytes(b"das ist kein zip")
-        (self.out / "kaputt.json").write_text("{}", encoding="utf-8")
+        (self.out / "broken.sav").write_bytes(b"this is not a zip")
+        (self.out / "broken.json").write_text("{}", encoding="utf-8")
         with self.assertRaises(DmcpError) as ctx:
-            self.box.state_load("kaputt")
+            self.box.state_load("broken")
         self.assertEqual(ctx.exception.code, "bad_argument")
 
     def test_load_without_sidecar_needs_flag(self):
-        self.box.run_until(adresse=self.adr(0x10A))
-        info = self.box.state_save("st_ohne")
-        Path(info["info_pfad"]).unlink()
+        self.box.run_until(address=self.addr(0x10A))
+        info = self.box.state_save("st_without")
+        Path(info["info_path"]).unlink()
         with self.assertRaises(DmcpError) as ctx:
-            self.box.state_load("st_ohne")
+            self.box.state_load("st_without")
         self.assertEqual(ctx.exception.code, "bad_argument")
-        self.assertTrue(self.box.state_load("st_ohne", ohne_pruefung=True)["geladen"])
+        self.assertTrue(self.box.state_load("st_without", skip_check=True)["loaded"])
 
     def test_sidecar_mismatch(self):
-        self.box.run_until(adresse=self.adr(0x10A))
-        info = self.box.state_save("st_falsch")
-        meta = json.loads(Path(info["info_pfad"]).read_text(encoding="utf-8"))
-        meta["speicher_seiten"] += 256
-        Path(info["info_pfad"]).write_text(json.dumps(meta), encoding="utf-8")
+        self.box.run_until(address=self.addr(0x10A))
+        info = self.box.state_save("st_wrong")
+        meta = json.loads(Path(info["info_path"]).read_text(encoding="utf-8"))
+        meta["memory_pages"] += 256
+        Path(info["info_path"]).write_text(json.dumps(meta), encoding="utf-8")
         with self.assertRaises(DmcpError) as ctx:
-            self.box.state_load("st_falsch")
+            self.box.state_load("st_wrong")
         self.assertEqual(ctx.exception.code, "bad_argument")
-        self.assertIn("speicher", ctx.exception.message.lower())
+        self.assertIn("memory", ctx.exception.message.lower())
 
     def test_zip_memory_size_mismatch(self):
-        # Memory_Size im Archiv passt nicht zur Instanz: nie laden (Upstream kopiert sonst ueber MemBase hinaus),
-        # auch nicht mit ohne_pruefung oder mit einer (veralteten) passenden Begleitdatei.
-        self.box.run_until(adresse=self.adr(0x10A))
+        # Memory_Size in the archive does not match the instance: never load it (upstream would otherwise copy past MemBase),
+        # not even with skip_check or with a matching (outdated) sidecar.
+        self.box.run_until(address=self.addr(0x10A))
         info = self.box.state_save("st_mem")
-        with zipfile.ZipFile(info["pfad"]) as src, zipfile.ZipFile(self.out / "st_mem2.sav", "w") as dst:
+        with zipfile.ZipFile(info["path"]) as src, zipfile.ZipFile(self.out / "st_mem2.sav", "w") as dst:
             for item in src.infolist():
                 data = src.read(item)
                 if item.filename == "Memory_Size":
                     data = str(int(data) + 256).encode()
                 dst.writestr(item, data)
-        (self.out / "st_mem2.json").write_text(Path(info["info_pfad"]).read_text(encoding="utf-8"), encoding="utf-8")
+        (self.out / "st_mem2.json").write_text(Path(info["info_path"]).read_text(encoding="utf-8"), encoding="utf-8")
         for flag in (False, True):
-            with self.subTest(ohne_pruefung=flag):
+            with self.subTest(skip_check=flag):
                 with self.assertRaises(DmcpError) as ctx:
-                    self.box.state_load("st_mem2", ohne_pruefung=flag)
+                    self.box.state_load("st_mem2", skip_check=flag)
                 self.assertEqual(ctx.exception.code, "bad_argument")
-                self.assertIn("speicher", ctx.exception.message.lower())
+                self.assertIn("memory", ctx.exception.message.lower())
         (self.out / "st_mem2.json").unlink()
         with self.assertRaises(DmcpError) as ctx:
-            self.box.state_load("st_mem2", ohne_pruefung=True)
+            self.box.state_load("st_mem2", skip_check=True)
         self.assertEqual(ctx.exception.code, "bad_argument")
         self.assertIn("paused", self.box.status())
 
     def test_load_drops_stop_condition(self):
-        self.box.run_until(adresse=self.adr(0x10A))
+        self.box.run_until(address=self.addr(0x10A))
         self.box.state_save("st_until")
-        self.box.call("emu.run_until", adresse="l:FFFFFFF0")
-        self.assertEqual(self.box.status()["wartet_auf"], "run_until")
+        self.box.call("emu.run_until", address="l:FFFFFFF0")
+        self.assertEqual(self.box.status()["waiting_for"], "run_until")
         self.box.state_load("st_until")
-        self.assertNotIn("wartet_auf", self.box.status())
+        self.assertNotIn("waiting_for", self.box.status())
 
     def test_breakpoint_at_loaded_position_hits(self):
-        # Der alte Halt (breakpoint) gehoert nicht zum geladenen CS:EIP: ein Haltepunkt dort darf nicht
-        # uebersprungen werden.
-        self.box.run_until(adresse=self.adr(0x10A))
-        saved = self.wert()
+        # The old halt (breakpoint) does not belong to the loaded CS:EIP: a breakpoint there must not
+        # be skipped.
+        self.box.run_until(address=self.addr(0x10A))
+        saved = self.value()
         self.box.state_save("st_bp")
-        self.box.break_add(self.adr(0x10A))
+        self.box.break_add(self.addr(0x10A))
         try:
             self.box.resume()
             st = self.box.wait_paused()
             self.assertEqual(st["stop_reason"], "breakpoint")
             self.box.state_load("st_bp")
-            self.assertEqual(self.wert(), saved)
+            self.assertEqual(self.value(), saved)
             self.box.resume()
             st = self.box.wait_paused()
             self.assertEqual(st["stop_reason"], "breakpoint")
             self.assertEqual(int(st["eip"], 16), 0x10A)
-            self.assertEqual(self.wert(), saved)
+            self.assertEqual(self.value(), saved)
         finally:
             self.box.break_remove(all=True)
 
     def test_bad_name(self):
         with self.assertRaises(DmcpError) as ctx:
-            self.box.state_save("..\\boese")
+            self.box.state_save("..\\evil")
         self.assertEqual(ctx.exception.code, "bad_argument")
 
     def test_corrupt_zip_with_valid_sidecar(self):
-        self.box.run_until(adresse=self.adr(0x10A))
-        info = self.box.state_save("st_echt")
-        (self.out / "st_muell.sav").write_bytes(b"PK\x03\x04" + b"garbage" * 100)
-        (self.out / "st_muell.json").write_text(Path(info["info_pfad"]).read_text(encoding="utf-8"), encoding="utf-8")
+        self.box.run_until(address=self.addr(0x10A))
+        info = self.box.state_save("st_real")
+        (self.out / "st_garbage.sav").write_bytes(b"PK\x03\x04" + b"garbage" * 100)
+        (self.out / "st_garbage.json").write_text(Path(info["info_path"]).read_text(encoding="utf-8"), encoding="utf-8")
         with self.assertRaises(DmcpError) as ctx:
-            self.box.state_load("st_muell")
+            self.box.state_load("st_garbage")
         self.assertEqual(ctx.exception.code, "bad_argument")
         self.assertIn("paused", self.box.status())
 
     def test_truncated_state(self):
-        self.box.run_until(adresse=self.adr(0x10A))
-        info = self.box.state_save("st_ganz")
-        data = Path(info["pfad"]).read_bytes()
-        (self.out / "st_kurz.sav").write_bytes(data[: len(data) // 2])
-        (self.out / "st_kurz.json").write_text(Path(info["info_pfad"]).read_text(encoding="utf-8"), encoding="utf-8")
+        self.box.run_until(address=self.addr(0x10A))
+        info = self.box.state_save("st_integer")
+        data = Path(info["path"]).read_bytes()
+        (self.out / "st_short.sav").write_bytes(data[: len(data) // 2])
+        (self.out / "st_short.json").write_text(Path(info["info_path"]).read_text(encoding="utf-8"), encoding="utf-8")
         with self.assertRaises(DmcpError) as ctx:
-            self.box.state_load("st_kurz")
+            self.box.state_load("st_short")
         self.assertEqual(ctx.exception.code, "bad_argument")
 
     def test_reserved_names(self):
@@ -162,35 +162,35 @@ class StateTest(unittest.TestCase):
                 self.box.state_save(name)
             self.assertEqual(ctx.exception.code, "bad_argument")
 
-    def test_pfad_not_a_string(self):
+    def test_path_not_a_string(self):
         with self.assertRaises(DmcpError) as ctx:
-            self.box.call("state.load", pfad=5)
+            self.box.call("state.load", path=5)
         self.assertEqual(ctx.exception.code, "bad_argument")
 
 
 @need_build
 class StateEarlyLoadTest(unittest.TestCase):
-    """Laden, bevor die DOS-Shell laeuft, brachte den Emulator zum Absturz (Abnahme D31)."""
+    """Loading before the DOS shell is running used to crash the emulator (acceptance D31)."""
 
     def test_load_before_shell_is_refused_not_crash(self):
         donor = start_idle()
         try:
             wait_prompt(donor)
             donor.pause()
-            pfad = donor.state_save("frueh")["pfad"]
+            path = donor.state_save("early")["path"]
         finally:
             donor.stop()
         box = start_idle()
         try:
-            box.pause()  # direkt nach dem Start: Shell noch nicht da
+            box.pause()  # right after the start: shell not there yet
             with self.assertRaises(DmcpError) as ctx:
-                box.state_load(pfad=pfad)
+                box.state_load(path=path)
             self.assertEqual(ctx.exception.code, "not_ready")
             self.assertTrue(box.inst.alive())
             box.resume()
             wait_prompt(box)
             box.pause()
-            self.assertTrue(box.state_load(pfad=pfad)["geladen"])
+            self.assertTrue(box.state_load(path=path)["loaded"])
             box.resume()
             wait_prompt(box)
         finally:
@@ -201,12 +201,12 @@ class StateEarlyLoadTest(unittest.TestCase):
         try:
             wait_prompt(donor)
             donor.pause()
-            pfad = donor.state_save("frueh2")["pfad"]
+            path = donor.state_save("early2")["path"]
         finally:
             donor.stop()
         box = start_idle()
         try:
-            self.assertTrue(box.state_load(pfad=pfad)["geladen"])  # laeuft noch an: die Bibliothek wartet
+            self.assertTrue(box.state_load(path=path)["loaded"])  # still running: the library waits
             self.assertTrue(box.inst.alive())
         finally:
             box.stop()
@@ -214,8 +214,8 @@ class StateEarlyLoadTest(unittest.TestCase):
 
 @need_build
 class StateAfterBootTest(unittest.TestCase):
-    """Nach BOOT eines Gast-Systems ist der DOS-Kernel wieder aus; Laden brachte den Emulator dann zum Absturz
-    (Review D31). Erwartet: saubere Ablehnung not_ready, Emulator lebt."""
+    """After BOOT of a guest system the DOS kernel is gone again; loading used to crash the emulator then
+    (review D31). Expected: a clean rejection not_ready, emulator alive."""
 
     def test_load_after_boot(self):
         import shutil
@@ -226,7 +226,7 @@ class StateAfterBootTest(unittest.TestCase):
         try:
             wait_prompt(donor)
             donor.pause()
-            pfad = donor.state_save("vor_boot")["pfad"]
+            path = donor.state_save("before_boot")["path"]
         finally:
             donor.stop()
         tmp = Path(tempfile.mkdtemp(prefix="dmcp-boot-"))
@@ -240,11 +240,11 @@ class StateAfterBootTest(unittest.TestCase):
 
             def booted():
                 regs = box.registers()
-                return int(regs["seg"]["cs"]["basis"], 16) + int(regs["gp"]["eip"], 16) in (0x7C01, 0x7C02, 0x7C03)
+                return int(regs["seg"]["cs"]["base"], 16) + int(regs["gp"]["eip"], 16) in (0x7C01, 0x7C02, 0x7C03)
             wait_until(booted, timeout=20)
-            box.pause()  # angehalten: die Bibliothek wartet nicht, der Fehler kommt sofort
+            box.pause()  # paused: the library does not wait, the error comes immediately
             with self.assertRaises(DmcpError) as ctx:
-                box.state_load(pfad=pfad)
+                box.state_load(path=path)
             self.assertEqual(ctx.exception.code, "not_ready")
             self.assertTrue(box.inst.alive())
             self.assertTrue(box.status()["paused"])

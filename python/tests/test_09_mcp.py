@@ -19,40 +19,40 @@ class McpTest(unittest.TestCase):
                          "watch_list", "watch_log", "watch_clear_log", "state_save", "state_load",
                          "dos_programs", "dos_mcb", "dos_files", "dos_target", "mouse_move_program", "func_run"):
             self.assertIn(expected, names)
-        started = mcp_server.dosbox_start(laufwerk_c=str(TESTPROGS), befehle=["MEMTEST.COM"], headless=True)
+        started = mcp_server.dosbox_start(drive_c=str(TESTPROGS), commands=["MEMTEST.COM"], headless=True)
         try:
             regs = mcp_server.cpu_registers()
-            self.assertEqual(regs["modus"], "real")
+            self.assertEqual(regs["mode"], "real")
             out = mcp_server.mem_read("l:0", 16)
             self.assertEqual(len(out["hex"]), 32)
             mcp_server.coverage_start()
             info = mcp_server.coverage_save("mcp_cov")
-            self.assertTrue(info["pfad"].endswith("mcp_cov.bin"))
-            self.assertTrue(any(m["modul"] == "MEMTEST.COM" for m in mcp_server.modules_list()["module"]))
+            self.assertTrue(info["path"].endswith("mcp_cov.bin"))
+            self.assertTrue(any(m["module"] == "MEMTEST.COM" for m in mcp_server.modules_list()["modules"]))
             snap = mcp_server.snapshot("mcp")
-            self.assertTrue(snap["pfad"].endswith("_mcp"))
+            self.assertTrue(snap["path"].endswith("_mcp"))
         finally:
-            mcp_server.dosbox_stop(started["instanz"])
+            mcp_server.dosbox_stop(started["instance"])
 
     def test_debug_tools(self):
         from dosbox_lab import mcp_server
         started = mcp_server.dosbox_start(str(TESTPROGS), ["DEBUG.COM"], headless=True)
-        inst = started["instanz"]
+        inst = started["instance"]
         try:
             import time
             for _ in range(100):
-                mods = mcp_server.modules_list(instanz=inst)["module"]
-                if any(m["modul"] == "DEBUG.COM" and "psp" in m for m in mods):
+                mods = mcp_server.modules_list(instance=inst)["modules"]
+                if any(m["module"] == "DEBUG.COM" and "psp" in m for m in mods):
                     break
                 time.sleep(0.1)
-            st = mcp_server.emu_run_until(adresse="rel:DEBUG.COM:0000:010A", instanz=inst)
+            st = mcp_server.emu_run_until(address="rel:DEBUG.COM:0000:010A", instance=inst)
             self.assertEqual(st["stop_reason"], "run_until")
-            lines = mcp_server.cpu_disassemble(anzahl=2, instanz=inst)["zeilen"]
+            lines = mcp_server.cpu_disassemble(count=2, instance=inst)["lines"]
             self.assertEqual(lines[0]["bytes"], "A18001")
-            self.assertEqual(int(mcp_server.emu_eval("ip", instanz=inst)["wert"], 16), 0x10A)
-            self.assertTrue(mcp_server.dos_target(instanz=inst)["gefunden"])
+            self.assertEqual(int(mcp_server.emu_eval("ip", instance=inst)["value"], 16), 0x10A)
+            self.assertTrue(mcp_server.dos_target(instance=inst)["found"])
         finally:
-            mcp_server.dosbox_stop(instanz=inst)
+            mcp_server.dosbox_stop(instance=inst)
 
 
 if __name__ == "__main__":

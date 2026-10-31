@@ -23,7 +23,7 @@ def fake_instance(test, pid):
 
 
 class PidIdentityTest(unittest.TestCase):
-    """B2: eine laufende PID zaehlt nur, wenn der Prozess dosbox-lab.exe ist."""
+    """B2: a running PID only counts if the process is dosbox-lab.exe."""
 
     def test_foreign_running_process_is_not_alive(self):
         self.assertFalse(_pid_alive(os.getpid()))
@@ -40,7 +40,7 @@ class PidIdentityTest(unittest.TestCase):
         with mock.patch("dosbox_lab.instance.subprocess.run") as run:
             inst.stop()
         run.assert_not_called()
-        self.assertTrue(inst.alive() is False)  # und wir leben noch
+        self.assertTrue(inst.alive() is False)  # and we are still alive
 
     def test_image_name_check_is_case_insensitive(self):
         with mock.patch("dosbox_lab.instance._image_name", return_value=r"C:\X\DOSBox-Lab.EXE"):
@@ -50,13 +50,13 @@ class PidIdentityTest(unittest.TestCase):
 
 
 class StartFailureTest(unittest.TestCase):
-    """B14: OSError beim Start wird DmcpError(internal), auch im CLI als JSON."""
+    """B14: an OSError at startup becomes DmcpError(internal), in the CLI too as JSON."""
 
     def test_unexecutable_exe(self):
         tmp = Path(tempfile.mkdtemp(prefix="dmcp-exe-"))
         self.addCleanup(shutil.rmtree, tmp, True)
         fake = tmp / "dosbox-lab.exe"
-        fake.write_text("kein programm")
+        fake.write_text("no program")
         inst_id = "failtest-" + os.urandom(3).hex()
         self.addCleanup(shutil.rmtree, RUNS / inst_id, True)
         with self.assertRaises(DmcpError) as ctx:
@@ -74,31 +74,31 @@ class StartFailureTest(unittest.TestCase):
         return json.loads(out[0])
 
     def test_cli_prints_json_error(self):
-        # So kommt ein Startfehler wirklich an: Instance.start hat den OSError schon umgewandelt.
+        # This is how a start failure really arrives: Instance.start has already converted the OSError.
         data = self._cli_error(DmcpError("internal", "emulator could not be started: [WinError 32] ..."))
-        self.assertEqual(data["fehler"], "internal")
-        self.assertIn("could not be started", data["meldung"])
+        self.assertEqual(data["error"], "internal")
+        self.assertIn("could not be started", data["message"])
 
     def test_cli_other_os_error_has_neutral_message(self):
-        # Andere OSErrors (z. B. beim Lesen einer Ausgabedatei) duerfen nicht als Startfehler erscheinen.
-        data = self._cli_error(PermissionError(32, "Der Prozess kann nicht auf die Datei zugreifen"))
-        self.assertEqual(data["fehler"], "internal")
-        self.assertNotIn("could not be started", data["meldung"])
-        self.assertIn("operating system error", data["meldung"])
+        # Other OSErrors (e.g. when reading an output file) must not show up as start failures.
+        data = self._cli_error(PermissionError(32, "The process cannot access the file"))
+        self.assertEqual(data["error"], "internal")
+        self.assertNotIn("could not be started", data["message"])
+        self.assertIn("operating system error", data["message"])
 
 
 @need_build
 class RelativeMountTest(unittest.TestCase):
-    """B15: relative Host-Pfade gelten relativ zum Aufrufer, nicht zum Laufordner."""
+    """B15: relative host paths are relative to the caller, not to the run folder."""
 
     def test_relative_mount_path(self):
-        RUNS.mkdir(exist_ok=True)  # gleiches Laufwerk wie das Repo, damit ein relativer Pfad existiert
+        RUNS.mkdir(exist_ok=True)  # same drive as the repo, so that a relative path exists
         work = Path(tempfile.mkdtemp(prefix="dmcp-rel-", dir=RUNS))
         self.addCleanup(shutil.rmtree, work, True)
         shutil.copy(TESTPROGS / "BATCH.COM", work / "BATCH.COM")
         rel = os.path.relpath(work)
         r = run_batch([Mount("C", rel)], "BATCH", timeout_s=30)
-        self.assertEqual(r["status"], "fertig")
+        self.assertEqual(r["status"], "done")
         self.assertEqual(r["exit_code"], 7)
 
 
