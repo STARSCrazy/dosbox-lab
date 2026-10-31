@@ -1,4 +1,4 @@
-; CALLS.COM - known calls for the call log (D29). Offsets relative to the PSP segment
+; CALLS.COM - known calls for the call log. Offsets relative to the PSP segment
 ; (linear = PSP*16 + offset). Waits until the test sets go (03F1) to 1.
 ;   0200 inner (inc ax)        0210 outer (2x inner)      0220 recurse (recursion via cx)
 ;   0230 far_fn (retf, ax=1234)  0240 with_param (ret 4)    0250 often (called 5x)

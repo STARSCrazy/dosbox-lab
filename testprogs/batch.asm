@@ -1,4 +1,4 @@
-; BATCH.COM - test program for run_batch (stage 4).
+; BATCH.COM - test program for run_batch.
 ; stdout: "A" (INT 21h 02h), "B" (INT 21h 06h), "TTY" (INT 10h 0Eh), CR LF (INT 21h 02h) -> "ABTTY\r\n".
 ; Creates BATCH.OUT with the content "DMCP" (4 bytes) and writes "ERR\r\n" to handle 2 (stderr).
 ; Ends with errorlevel 07h; if BATCH.OUT cannot be created: errorlevel 01h.

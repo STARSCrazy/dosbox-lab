@@ -1,4 +1,4 @@
-; FILEIO.COM - known file accesses for D34. Waits for go (03F1). Offsets relative to the PSP segment.
+; FILEIO.COM - known file accesses for the file event. Waits for go (03F1). Offsets relative to the PSP segment.
 ;   creates FIO.DAT and writes 64 bytes 00..3F, closes; opens it, sets position 10h, reads 16 bytes via
 ;   read (0280) into buffer (0400), reads 8 bytes directly into 0410, closes, writes "FIO" to CON (handle 1,
 ;   no file event), done=1 (03F0), then an hlt loop.

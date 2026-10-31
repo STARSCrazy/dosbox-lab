@@ -1,4 +1,4 @@
-; DEBUG.COM - known flow for the debug tests (stage 3).
+; DEBUG.COM - known flow for the debug tests.
 ; Offsets relative to the PSP segment (linear = PSP*16 + offset):
 ;   0100 mov dx,message   0103 mov ah,09   0105 int 21h (print text)
 ;   0107 main_loop: call under (-> 0140)

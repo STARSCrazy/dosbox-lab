@@ -1,5 +1,5 @@
 ; OUTPUT=EXE
-; LE.EXE - test program for the LE base derivation (D27).
+; LE.EXE - test program for the LE base derivation.
 ; MZ program with an appended LE header (dword at 0x3C): 2 objects
 ;   obj1 va 0x10000 size 0x3000, obj2 va 0x20000 size 0x0A10; EIP object 1, EIP 0x100 (entry_va 0x10100).
 ; Installs its own real-mode handler for INT 31h: AX=0501h returns fixed linear addresses in order

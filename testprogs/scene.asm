@@ -1,4 +1,4 @@
-; SCENE.COM - test program for scenarios (D35). Offsets relative to the PSP.
+; SCENE.COM - test program for scenarios. Offsets relative to the PSP.
 ; Prints READY, waits for a key (INT 16h), stores the char at 0300, prints "KEY <char>",
 ; calls done_fn and stops in an HLT loop.
 ;   0200 done_fn: [0301] = 5Ah, prints DONE, ret

@@ -1,4 +1,4 @@
-; CALLSEXC.COM - exception contexts without their own IRET for the call log (D29).
+; CALLSEXC.COM - exception contexts without their own IRET for the call log.
 ; Offsets relative to the PSP segment (linear = PSP*16 + offset). Waits until the test sets go (03F1) to 1.
 ;   1. div 0 -> handler (context 1); it raises div 0 again (context 2); the second entry resets SP to
 ;      the first frame and returns by IRET to the first fault (context 2 ends without its own IRET).
