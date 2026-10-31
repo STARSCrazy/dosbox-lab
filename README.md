@@ -23,16 +23,17 @@ Typical uses: reverse engineering and decompiling DOS games and programs, record
 
 ## Requirements
 
-- Windows x64 (a Linux build of the extension has not been tried yet)
-- Visual Studio 2019 Build Tools (MSBuild, C++ x64) to build the emulator
+- Windows x64. The extension is built with Visual Studio only so far; the other DOSBox-X build paths (Linux, macOS, MinGW) have not been tried with it.
+- Microsoft Visual C++ (MSBuild), from Visual Studio 2019 or 2022 – the free Community edition or the Build Tools are enough, with the "Desktop development with C++" workload. The project uses the VS 2019 toolset (v142) by default, as DOSBox-X does. With VS 2022 either add the "MSVC v142" component in the installer or build with `-Toolset v143` (not tested yet).
 - Python 3.10 or newer
-- NASM, only if you want to rebuild the test programs
+- Optional: [NASM](https://www.nasm.us/) (the Netwide Assembler, a free x86 assembler), only to rebuild the small DOS test programs in `testprogs/`. The built programs are already included.
 
 ## Build
 
 ```powershell
 .\build.ps1          # Release SDL2 | x64 -> bin\x64\Release SDL2\dosbox-lab.exe
 .\build.ps1 -Clean   # full rebuild
+.\build.ps1 -Toolset v143   # use the VS 2022 toolset instead of v142
 ```
 
 `build.ps1` finds MSBuild through the `MSBUILD` environment variable, `vswhere` or `PATH`, and enables the extension with `/DC_DOSBOX_AGENT=1 /DC_DMCP=1`. The test programs in `testprogs/` are already checked in; to rebuild them run `testprogs\build.ps1` (NASM from the `NASM` environment variable or from `PATH`).
