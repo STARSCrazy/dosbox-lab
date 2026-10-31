@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Kommandozeile: duenne Huelle ueber die Bibliothek. Ausgabe immer JSON."""
+"""Command line: a thin shell around the library. Output is always JSON."""
 import argparse
 import json
 import sys
@@ -16,17 +16,17 @@ def _instances():
     for info_path in RUNS.glob("*/instance.json"):
         try:
             info = json.loads(info_path.read_text(encoding="utf-8"))
-            info["laeuft"] = _pid_alive(info["pid"])
+            info["running"] = _pid_alive(info["pid"])
             info["_mtime"] = info_path.stat().st_mtime
         except (OSError, ValueError, KeyError):
-            continue  # kaputte/halbfertige Altlast ueberspringen
+            continue  # skip broken or half-written leftovers
         found.append(info)
     return sorted(found, key=lambda i: i["_mtime"], reverse=True)
 
 
 def newest_instance():
     for info in _instances():
-        if info["laeuft"]:
+        if info["running"]:
             return info["id"]
     return None
 
@@ -40,7 +40,7 @@ def _int_rules(values):
     for value in values or []:
         num, _, ah = value.partition(":")
         int(num, 16)  # ValueError -> bad_argument (main)
-        rule = {"nummer": num}
+        rule = {"number": num}
         if ah:
             int(ah, 16)
             rule["ah"] = ah
@@ -50,221 +50,221 @@ def _int_rules(values):
 
 def build_parser():
     p = argparse.ArgumentParser(prog="dosbox_lab")
-    # --id vor oder nach dem Befehl erlaubt (SUPPRESS: Unterparser ueberschreibt nicht mit None)
+    # --id is allowed before or after the command (SUPPRESS: the subparser must not overwrite it with None)
     idopt = argparse.ArgumentParser(add_help=False)
     idopt.add_argument("--id", default=argparse.SUPPRESS,
-                       help="Instanz (Standard: zuletzt gestartete laufende)")
-    p.add_argument("--id", default=None, help="Instanz (Standard: zuletzt gestartete laufende)")
-    sub = p.add_subparsers(dest="befehl", required=True)
+                       help="instance id (default: the most recently started running instance)")
+    p.add_argument("--id", default=None, help="instance id (default: the most recently started running instance)")
+    sub = p.add_subparsers(dest="command", required=True)
 
     def add(name):
         return sub.add_parser(name, parents=[idopt])
 
     s = add("start")
-    s.add_argument("--dir", required=True, help="Ordner fuer Laufwerk C:")
-    s.add_argument("--cdrom", help="Ordner fuer CD-Laufwerk D:")
-    s.add_argument("--cmd", action="append", default=[], help="Autoexec-Zeile (mehrfach)")
-    s.add_argument("--headless", action="store_true")
+    s.add_argument("--dir", required=True, help="host directory for drive C:")
+    s.add_argument("--cdrom", help="host directory for CD drive D:")
+    s.add_argument("--cmd", action="append", default=[], help="autoexec line (repeatable)")
+    s.add_argument("--headless", action="store_true", help="no emulator window")
     s = add("batch")
-    s.add_argument("--dir", required=True, help="Ordner fuer Laufwerk C: (beschreibbar)")
-    s.add_argument("--cmd", required=True, help="DOS-Befehl, z. B. \"TCC HALLO.C\"")
-    s.add_argument("--d", help="Ordner fuer Laufwerk D:")
-    s.add_argument("--cdrom-d", action="store_true", help="D: nur lesbar (CD)")
+    s.add_argument("--dir", required=True, help="host directory for drive C: (writable)")
+    s.add_argument("--cmd", required=True, help="DOS command, e.g. \"TCC HELLO.C\"")
+    s.add_argument("--d", help="host directory for drive D:")
+    s.add_argument("--cdrom-d", action="store_true", help="mount D: read-only as a CD drive")
     s.add_argument("--timeout", type=float, default=60.0)
-    s.add_argument("--max-ausgabe", type=int, default=16 * 1024 * 1024)
-    s = add("szenario")
-    s.add_argument("--datei", required=True, help="Szenario-Datei (dosbox-lab-szenario/1)")
-    s.add_argument("--var", action="append", default=[], help="Variable NAME=WERT (mehrfach)")
-    s.add_argument("--fenster", action="store_true", help="mit Fenster statt headless")
-    s.add_argument("--offen", action="store_true", help="Emulator am Ende laufen lassen")
-    s.add_argument("--ausgabe", help="Ausgabeordner statt .runs/<id>/out")
+    s.add_argument("--max-output", type=int, default=16 * 1024 * 1024)
+    s = add("scenario")
+    s.add_argument("--file", required=True, help="scenario file (dosbox-lab-scenario/1)")
+    s.add_argument("--var", action="append", default=[], help="variable NAME=VALUE (repeatable)")
+    s.add_argument("--window", action="store_true", help="show the emulator window instead of running headless")
+    s.add_argument("--open", action="store_true", help="leave the emulator running at the end")
+    s.add_argument("--output-dir", help="output directory instead of .runs/<id>/out")
     for name in ("stop", "list", "status", "resume", "regs", "text", "video", "events-stop", "cov-stop",
                  "flow-stop", "modules", "calls-stop", "calls-status"):
         add(name)
-    s = add("pause"); s.add_argument("--bis", choices=["pmode"])
-    s = add("events-start"); s.add_argument("--typ", action="append")
-    s.add_argument("--int", action="append", help="NR oder NR:AH in Hex, z. B. 21:3D (mehrfach)")
-    s.add_argument("--rueckgabe", action="store_true"); s.add_argument("--max-bytes", type=int)
-    s.add_argument("--vorschau", type=int, help="Bytes Vorschau im Ereignis datei")
-    s = add("calls-start"); s.add_argument("--ziel", action="append", help="Adresse/Symbol (mehrfach)")
-    s.add_argument("--bereich", nargs=2, action="append", metavar=("VON", "BIS"), help="Adressbereich (mehrfach)")
-    s.add_argument("--modul", action="append"); s.add_argument("--int", action="append", help="NR oder NR:AH in Hex")
-    s.add_argument("--stack", type=int); s.add_argument("--max-je-ziel", type=int, default=1000)
+    s = add("pause"); s.add_argument("--until", choices=["pmode"])
+    s = add("events-start"); s.add_argument("--type", action="append")
+    s.add_argument("--int", action="append", help="NUMBER or NUMBER:AH in hex, e.g. 21:3D (repeatable)")
+    s.add_argument("--with-return", action="store_true"); s.add_argument("--max-bytes", type=int)
+    s.add_argument("--preview", type=int, help="number of data bytes to show in a file event")
+    s = add("calls-start"); s.add_argument("--target", action="append", help="address or symbol (repeatable)")
+    s.add_argument("--range", nargs=2, action="append", metavar=("FROM", "TO"), help="address range (repeatable)")
+    s.add_argument("--module", action="append"); s.add_argument("--int", action="append", help="NUMBER or NUMBER:AH in hex")
+    s.add_argument("--stack", type=int); s.add_argument("--max-per-target", type=int, default=1000)
     s.add_argument("--max-bytes", type=int); s.add_argument("--name", default="calls")
-    s.add_argument("--zustaende", type=int, default=0); s.add_argument("--max-zustaende", type=int, default=1000)
-    s = add("func-run"); s.add_argument("--zustand", required=True)
-    s.add_argument("--schreiben", action="append", help="ADRESSE=HEX (mehrfach)")
-    s.add_argument("--reg", action="append", help="NAME=WERT (mehrfach, Hex)")
+    s.add_argument("--states", type=int, default=0); s.add_argument("--max-states", type=int, default=1000)
+    s = add("func-run"); s.add_argument("--state", required=True)
+    s.add_argument("--write", action="append", help="ADDRESS=HEX (repeatable)")
+    s.add_argument("--reg", action="append", help="NAME=VALUE in hex (repeatable)")
     s.add_argument("--stack"); s.add_argument("--irqs", action="store_true")
-    s.add_argument("--max-befehle", type=int); s.add_argument("--name", default="func")
+    s.add_argument("--max-instructions", type=int); s.add_argument("--name", default="func")
     s.add_argument("--timeout", type=float, default=60.0)
-    s = add("events-read"); s.add_argument("--seit", type=int, default=0); s.add_argument("--max", type=int, default=50)
-    s = add("cov-start"); s.add_argument("--hits", action="store_true"); s.add_argument("--max-bloecke", type=int)
+    s = add("events-read"); s.add_argument("--since", type=int, default=0); s.add_argument("--max", type=int, default=50)
+    s = add("cov-start"); s.add_argument("--hits", action="store_true"); s.add_argument("--max-blocks", type=int)
     s = add("cov-save"); s.add_argument("name", nargs="?", default="coverage")
     s = add("flow-start"); s.add_argument("--returns", action="store_true"); s.add_argument("--ring", type=int, default=4096)
-    s = add("flow-save"); s.add_argument("name", nargs="?", default="indirekt")
-    s = add("flow-recent"); s.add_argument("anzahl", nargs="?", type=int, default=100)
-    s = add("segments"); s.add_argument("modul"); s.add_argument("segmente", help="JSON-Liste")
-    s = add("symbols"); s.add_argument("pfad"); s.add_argument("--basis")
+    s = add("flow-save"); s.add_argument("name", nargs="?", default="indirect")
+    s = add("flow-recent"); s.add_argument("count", nargs="?", type=int, default=100)
+    s = add("segments"); s.add_argument("module"); s.add_argument("segments", help="JSON list of segments")
+    s = add("symbols"); s.add_argument("path"); s.add_argument("--base")
     s = add("symbol"); s.add_argument("name")
     s = add("snapshot"); s.add_argument("label"); s.add_argument("--ext", action="store_true")
-    s.add_argument("--bis", choices=["pmode"])
+    s.add_argument("--until", choices=["pmode"])
     s = add("step"); s.add_argument("count", type=int, nargs="?", default=1)
-    s = add("translate"); s.add_argument("adresse")
-    s = add("read"); s.add_argument("adresse"); s.add_argument("laenge", type=_num)
-    s = add("write"); s.add_argument("adresse"); s.add_argument("hex")
-    s = add("dump"); s.add_argument("adresse"); s.add_argument("laenge", type=_num); s.add_argument("name")
-    s = add("search"); s.add_argument("adresse"); s.add_argument("laenge", type=_num)
+    s = add("translate"); s.add_argument("address")
+    s = add("read"); s.add_argument("address"); s.add_argument("length", type=_num)
+    s = add("write"); s.add_argument("address"); s.add_argument("hex")
+    s = add("dump"); s.add_argument("address"); s.add_argument("length", type=_num); s.add_argument("name")
+    s = add("search"); s.add_argument("address"); s.add_argument("length", type=_num)
     g = s.add_mutually_exclusive_group(required=True); g.add_argument("--hex"); g.add_argument("--text")
-    s = add("key"); s.add_argument("taste")
+    s = add("key"); s.add_argument("key")
     s = add("type"); s.add_argument("text"); s.add_argument("--layout", default="de")
     s = add("move"); s.add_argument("x", type=float); s.add_argument("y", type=float)
     s = add("click"); s.add_argument("x", type=float); s.add_argument("y", type=float)
-    s.add_argument("--button", default="links")
+    s.add_argument("--button", default="left")
     s = add("shot"); s.add_argument("name", nargs="?", default="screen")
-    s.add_argument("--rect", help="x,y,breite,hoehe")
-    s = add("until"); s.add_argument("--adresse"); s.add_argument("--pmode", action="store_true")
+    s.add_argument("--rect", help="x,y,width,height")
+    s = add("until"); s.add_argument("--address"); s.add_argument("--pmode", action="store_true")
     s.add_argument("--paging", action="store_true"); s.add_argument("--cs"); s.add_argument("--cpl", type=int)
-    s.add_argument("--ausdruck"); s.add_argument("--timeout", type=float, default=10.0)
+    s.add_argument("--expression"); s.add_argument("--timeout", type=float, default=10.0)
     s = add("step-over"); s.add_argument("--timeout", type=float, default=10.0)
-    s = add("frame"); s.add_argument("anzahl", nargs="?", type=int, default=1)
-    s = add("eval"); s.add_argument("ausdruck")
-    s = add("speed"); s.add_argument("modus", choices=["normal", "turbo", "cycles"]); s.add_argument("--cycles", type=int)
-    s = add("break"); s.add_argument("ziel"); s.add_argument("--bedingung"); s.add_argument("--einmalig", action="store_true")
-    s = add("unbreak"); s.add_argument("ziel", nargs="?"); s.add_argument("--alle", action="store_true")
-    s = add("break-int"); s.add_argument("nummer"); s.add_argument("--ah"); s.add_argument("--al")
+    s = add("frame"); s.add_argument("count", nargs="?", type=int, default=1)
+    s = add("eval"); s.add_argument("expression")
+    s = add("speed"); s.add_argument("mode", choices=["normal", "turbo", "cycles"]); s.add_argument("--cycles", type=int)
+    s = add("break"); s.add_argument("target"); s.add_argument("--condition"); s.add_argument("--once", action="store_true")
+    s = add("unbreak"); s.add_argument("target", nargs="?"); s.add_argument("--all", action="store_true")
+    s = add("break-int"); s.add_argument("number"); s.add_argument("--ah"); s.add_argument("--al")
     add("break-list")
-    s = add("dis"); s.add_argument("adresse", nargs="?"); s.add_argument("--anzahl", type=int, default=10)
+    s = add("dis"); s.add_argument("address", nargs="?"); s.add_argument("--count", type=int, default=10)
     s.add_argument("--bits", type=int, choices=[16, 32]); s.add_argument("--name")
-    s = add("watch"); s.add_argument("adresse"); s.add_argument("--laenge", type=_num, default=1)
-    s.add_argument("--art", default="schreiben", choices=["lesen", "schreiben", "beides"])
-    s.add_argument("--aktion", default="anhalten", choices=["anhalten", "protokollieren"])
-    s = add("unwatch"); s.add_argument("id", nargs="?", type=int); s.add_argument("--alle", action="store_true")
+    s = add("watch"); s.add_argument("address"); s.add_argument("--length", type=_num, default=1)
+    s.add_argument("--kind", default="write", choices=["read", "write", "both"])
+    s.add_argument("--action", default="halt", choices=["halt", "log"])
+    s = add("unwatch"); s.add_argument("id", nargs="?", type=int); s.add_argument("--all", action="store_true")
     add("watch-list")
-    s = add("watch-log"); s.add_argument("name", nargs="?", default="zugriffe"); s.add_argument("--leeren", action="store_true")
+    s = add("watch-log"); s.add_argument("name", nargs="?", default="accesses"); s.add_argument("--clear", action="store_true")
     s = add("state-save"); s.add_argument("name", nargs="?", default="state")
-    s = add("state-load"); s.add_argument("name", nargs="?", default="state"); s.add_argument("--pfad")
-    s.add_argument("--ohne-pruefung", action="store_true")
-    s = add("dos"); s.add_argument("art", choices=["programs", "mcb", "files", "target"])
-    s = add("call"); s.add_argument("methode"); s.add_argument("params", nargs="?", default="{}")
+    s = add("state-load"); s.add_argument("name", nargs="?", default="state"); s.add_argument("--path")
+    s.add_argument("--skip-check", action="store_true")
+    s = add("dos"); s.add_argument("kind", choices=["programs", "mcb", "files", "target"])
+    s = add("call"); s.add_argument("method"); s.add_argument("params", nargs="?", default="{}")
     return p
 
 
 def run(args):
-    if args.befehl == "list":
-        return {"instanzen": [{k: v for k, v in i.items() if not k.startswith("_")} for i in _instances()]}
-    if args.befehl == "start":
+    if args.command == "list":
+        return {"instances": [{k: v for k, v in i.items() if not k.startswith("_")} for i in _instances()]}
+    if args.command == "start":
         mounts = [Mount("C", args.dir)] + ([Mount("D", args.cdrom, cdrom=True)] if args.cdrom else [])
         box = Dosbox.start(mounts=mounts, autoexec=args.cmd, headless=args.headless)
         return {"id": box.id, "rundir": str(box.inst.rundir)}
-    if args.befehl == "batch":
+    if args.command == "batch":
         mounts = [Mount("C", args.dir)] + ([Mount("D", args.d, cdrom=args.cdrom_d)] if args.d else [])
-        return run_batch(mounts, args.cmd, timeout_s=args.timeout, max_ausgabe=args.max_ausgabe)
-    if args.befehl == "szenario":
-        variablen = {}
+        return run_batch(mounts, args.cmd, timeout_s=args.timeout, max_output=args.max_output)
+    if args.command == "scenario":
+        variables = {}
         for item in args.var:
             if "=" not in item:
-                raise DmcpError("bad_argument", f"--var braucht die Form NAME=WERT: {item}")
+                raise DmcpError("bad_argument", f"--var needs the form NAME=VALUE: {item}")
             k, v = item.split("=", 1)
-            variablen[k] = v
-        _box, ergebnis = play_scenario(args.datei, variablen=variablen, headless=not args.fenster,
-                                       stop_am_ende=not args.offen, ausgabe=args.ausgabe)
-        return ergebnis
+            variables[k] = v
+        _box, result = play_scenario(args.file, variables=variables, headless=not args.window,
+                                       stop_at_end=not args.open, output_dir=args.output_dir)
+        return result
     inst_id = args.id or newest_instance()
     if inst_id is None:
-        raise DmcpError("bad_argument", "keine laufende Instanz (erst start)")
+        raise DmcpError("bad_argument", "no running instance (run start first)")
     box = Dosbox.attach(inst_id)
-    if args.befehl == "stop":
+    if args.command == "stop":
         box.stop()
-        return {"gestoppt": inst_id}
-    if args.befehl == "status": return box.status()
-    if args.befehl == "resume": return box.resume()
-    if args.befehl == "step": return box.step(args.count)
-    if args.befehl == "regs": return box.registers()
-    if args.befehl == "translate": return box.translate(args.adresse)
-    if args.befehl == "read": return box.mem_read_info(args.adresse, args.laenge)
-    if args.befehl == "write": return box.mem_write(args.adresse, bytes.fromhex(args.hex))
-    if args.befehl == "dump": return box.mem_dump(args.adresse, args.laenge, args.name)
-    if args.befehl == "search":
+        return {"stopped": inst_id}
+    if args.command == "status": return box.status()
+    if args.command == "resume": return box.resume()
+    if args.command == "step": return box.step(args.count)
+    if args.command == "regs": return box.registers()
+    if args.command == "translate": return box.translate(args.address)
+    if args.command == "read": return box.mem_read_info(args.address, args.length)
+    if args.command == "write": return box.mem_write(args.address, bytes.fromhex(args.hex))
+    if args.command == "dump": return box.mem_dump(args.address, args.length, args.name)
+    if args.command == "search":
         pattern = args.text if args.text is not None else bytes.fromhex(args.hex)
-        return {"treffer": box.mem_search(args.adresse, args.laenge, pattern)}
-    if args.befehl == "key": return box.key(args.taste)
-    if args.befehl == "type": return box.type_text(args.text, layout=args.layout)
-    if args.befehl == "move": return box.mouse_move(args.x, args.y)
-    if args.befehl == "click": return box.mouse_click(args.x, args.y, button=args.button)
-    if args.befehl == "shot":
+        return {"hits": box.mem_search(args.address, args.length, pattern)}
+    if args.command == "key": return box.key(args.key)
+    if args.command == "type": return box.type_text(args.text, layout=args.layout)
+    if args.command == "move": return box.mouse_move(args.x, args.y)
+    if args.command == "click": return box.mouse_click(args.x, args.y, button=args.button)
+    if args.command == "shot":
         rect = tuple(int(v) for v in args.rect.split(",")) if args.rect else None
         return box.screenshot(args.name, rect=rect)
-    if args.befehl == "text": return box.screen_text()
-    if args.befehl == "video": return box.video_state()
-    if args.befehl == "pause": return box.pause(until=args.bis)
-    if args.befehl == "events-start":
-        return box.events_start(typen=args.typ, int_filter=_int_rules(args.int), mit_rueckgabe=args.rueckgabe,
-                                max_bytes=args.max_bytes, datei_vorschau=args.vorschau)
-    if args.befehl == "calls-start":
-        bereiche = [{"von": v, "bis": b} for v, b in args.bereich] if args.bereich else None
-        return box.calls_start(ziele=args.ziel, bereiche=bereiche, module=args.modul,
+    if args.command == "text": return box.screen_text()
+    if args.command == "video": return box.video_state()
+    if args.command == "pause": return box.pause(until=args.until)
+    if args.command == "events-start":
+        return box.events_start(types=args.type, int_filter=_int_rules(args.int), with_return=args.with_return,
+                                max_bytes=args.max_bytes, file_preview=args.preview)
+    if args.command == "calls-start":
+        ranges = [{"from": v, "to": b} for v, b in args.range] if args.range else None
+        return box.calls_start(targets=args.target, ranges=ranges, modules=args.module,
                                ints=_int_rules(args.int) if args.int else None, stack_bytes=args.stack,
-                               max_je_ziel=args.max_je_ziel, max_bytes=args.max_bytes, name=args.name,
-                               zustaende=args.zustaende, max_zustaende=args.max_zustaende)
-    if args.befehl == "func-run":
+                               max_per_target=args.max_per_target, max_bytes=args.max_bytes, name=args.name,
+                               states=args.states, max_states=args.max_states)
+    if args.command == "func-run":
         def pairs(items, what):
             for item in items or []:
                 if "=" not in item:
-                    raise DmcpError("bad_argument", f"{what} braucht die Form A=B: {item}")
+                    raise DmcpError("bad_argument", f"{what} needs the form A=B: {item}")
             return [item.split("=", 1) for item in items or []]
-        schreiben = [{"adresse": a, "hex": h} for a, h in pairs(args.schreiben, "--schreiben")]
+        write = [{"address": a, "hex": h} for a, h in pairs(args.write, "--write")]
         regs = dict(pairs(args.reg, "--reg"))
-        return box.func_run(args.zustand, schreiben=schreiben or None, regs=regs or None, stack=args.stack,
-                            irqs=args.irqs, max_befehle=args.max_befehle, name=args.name, timeout_s=args.timeout)
-    if args.befehl == "calls-stop": return box.calls_stop()
-    if args.befehl == "calls-status": return box.calls_status()
-    if args.befehl == "events-stop": return box.events_stop()
-    if args.befehl == "events-read": return box.events_read(args.seit, args.max)
-    if args.befehl == "cov-start": return box.coverage_start(args.max_bloecke, hits=args.hits)
-    if args.befehl == "cov-stop": return box.coverage_stop()
-    if args.befehl == "cov-save": return box.coverage_save(args.name)
-    if args.befehl == "flow-start": return box.flow_start(ring_groesse=args.ring, mit_returns=args.returns)
-    if args.befehl == "flow-stop": return box.flow_stop()
-    if args.befehl == "flow-save": return box.flow_save(args.name)
-    if args.befehl == "flow-recent": return box.flow_recent(args.anzahl)
-    if args.befehl == "modules": return {"module": box.modules()}
-    if args.befehl == "segments": return box.set_segments(args.modul, json.loads(args.segmente))
-    if args.befehl == "symbols": return box.symbols_load(args.pfad, args.basis)
-    if args.befehl == "symbol": return box.symbol_lookup(name=args.name)
-    if args.befehl == "snapshot": return box.snapshot(args.label, mit_erweiterung=args.ext, bis=args.bis)
-    if args.befehl == "until":
-        return box.run_until(adresse=args.adresse, pmode=args.pmode or None, paging=args.paging or None,
-                             cs=args.cs, cpl=args.cpl, ausdruck=args.ausdruck, timeout_s=args.timeout)
-    if args.befehl == "step-over": return box.step_over(timeout_s=args.timeout)
-    if args.befehl == "frame": return box.frame_step(args.anzahl)
-    if args.befehl == "eval": return box.eval(args.ausdruck)
-    if args.befehl == "speed": return box.speed(args.modus, cycles=args.cycles)
-    if args.befehl == "break":
-        return box.break_add(args.ziel, bedingung=args.bedingung, einmalig=args.einmalig)
-    if args.befehl == "unbreak":
-        return box.break_remove(all=True) if args.alle else box.break_remove(args.ziel)
-    if args.befehl == "break-int": return box.break_int_add(args.nummer, ah=args.ah, al=args.al)
-    if args.befehl == "break-list": return box.break_list()
-    if args.befehl == "dis": return box.disassemble(args.adresse, anzahl=args.anzahl, bits=args.bits, name=args.name)
-    if args.befehl == "watch":
-        return box.watch_add(args.adresse, laenge=args.laenge, art=args.art, aktion=args.aktion)
-    if args.befehl == "unwatch":
-        return box.watch_remove(all=True) if args.alle else box.watch_remove(args.id)
-    if args.befehl == "watch-list": return box.watch_list()
-    if args.befehl == "watch-log": return box.watch_log(args.name, leeren=args.leeren)
-    if args.befehl == "state-save": return box.state_save(args.name)
-    if args.befehl == "state-load":
-        return box.state_load(args.name, pfad=args.pfad, ohne_pruefung=args.ohne_pruefung)
-    if args.befehl == "dos":
+        return box.func_run(args.state, write=write or None, regs=regs or None, stack=args.stack,
+                            irqs=args.irqs, max_instructions=args.max_instructions, name=args.name, timeout_s=args.timeout)
+    if args.command == "calls-stop": return box.calls_stop()
+    if args.command == "calls-status": return box.calls_status()
+    if args.command == "events-stop": return box.events_stop()
+    if args.command == "events-read": return box.events_read(args.since, args.max)
+    if args.command == "cov-start": return box.coverage_start(args.max_blocks, hits=args.hits)
+    if args.command == "cov-stop": return box.coverage_stop()
+    if args.command == "cov-save": return box.coverage_save(args.name)
+    if args.command == "flow-start": return box.flow_start(ring_size=args.ring, with_returns=args.returns)
+    if args.command == "flow-stop": return box.flow_stop()
+    if args.command == "flow-save": return box.flow_save(args.name)
+    if args.command == "flow-recent": return box.flow_recent(args.count)
+    if args.command == "modules": return {"modules": box.modules()}
+    if args.command == "segments": return box.set_segments(args.module, json.loads(args.segments))
+    if args.command == "symbols": return box.symbols_load(args.path, args.base)
+    if args.command == "symbol": return box.symbol_lookup(name=args.name)
+    if args.command == "snapshot": return box.snapshot(args.label, with_extension=args.ext, until=args.until)
+    if args.command == "until":
+        return box.run_until(address=args.address, pmode=args.pmode or None, paging=args.paging or None,
+                             cs=args.cs, cpl=args.cpl, expression=args.expression, timeout_s=args.timeout)
+    if args.command == "step-over": return box.step_over(timeout_s=args.timeout)
+    if args.command == "frame": return box.frame_step(args.count)
+    if args.command == "eval": return box.eval(args.expression)
+    if args.command == "speed": return box.speed(args.mode, cycles=args.cycles)
+    if args.command == "break":
+        return box.break_add(args.target, condition=args.condition, once=args.once)
+    if args.command == "unbreak":
+        return box.break_remove(all=True) if args.all else box.break_remove(args.target)
+    if args.command == "break-int": return box.break_int_add(args.number, ah=args.ah, al=args.al)
+    if args.command == "break-list": return box.break_list()
+    if args.command == "dis": return box.disassemble(args.address, count=args.count, bits=args.bits, name=args.name)
+    if args.command == "watch":
+        return box.watch_add(args.address, length=args.length, kind=args.kind, action=args.action)
+    if args.command == "unwatch":
+        return box.watch_remove(all=True) if args.all else box.watch_remove(args.id)
+    if args.command == "watch-list": return box.watch_list()
+    if args.command == "watch-log": return box.watch_log(args.name, clear=args.clear)
+    if args.command == "state-save": return box.state_save(args.name)
+    if args.command == "state-load":
+        return box.state_load(args.name, path=args.path, skip_check=args.skip_check)
+    if args.command == "dos":
         return {"programs": box.dos_programs, "mcb": box.dos_mcb, "files": box.dos_files,
-                "target": box.dos_target}[args.art]()
-    if args.befehl == "call":
+                "target": box.dos_target}[args.kind]()
+    if args.command == "call":
         params = json.loads(args.params)
         if not isinstance(params, dict):
-            raise DmcpError("bad_argument", "params muss ein JSON-Objekt sein, z. B. '{\"count\": 2}'")
-        return box.call(args.methode, **params)
-    raise DmcpError("bad_argument", f"unbekannter Befehl {args.befehl}")
+            raise DmcpError("bad_argument", "params must be a JSON object, e.g. '{\"count\": 2}'")
+        return box.call(args.method, **params)
+    raise DmcpError("bad_argument", f"unknown command {args.command}")
 
 
 def main(argv=None):
@@ -272,13 +272,13 @@ def main(argv=None):
     try:
         result = run(args)
     except DmcpError as exc:
-        print(json.dumps({"fehler": exc.code, "meldung": exc.message}, ensure_ascii=True))
+        print(json.dumps({"error": exc.code, "message": exc.message}, ensure_ascii=True))
         return 1
-    except OSError as exc:  # z. B. Ausgabedatei nicht lesbar; Startfehler wandelt schon Instance.start um
-        print(json.dumps({"fehler": "internal", "meldung": f"operating system error: {exc}"}, ensure_ascii=True))
+    except OSError as exc:  # e.g. unreadable output file; start errors are already converted by Instance.start
+        print(json.dumps({"error": "internal", "message": f"operating system error: {exc}"}, ensure_ascii=True))
         return 1
-    except (ValueError, TypeError) as exc:  # Argumentumwandlung (JSON, Hex, --rect); JSONDecodeError ist ValueError
-        print(json.dumps({"fehler": "bad_argument", "meldung": str(exc)}, ensure_ascii=True))
+    except (ValueError, TypeError) as exc:  # argument conversion (JSON, hex, --rect); JSONDecodeError is a ValueError
+        print(json.dumps({"error": "bad_argument", "message": str(exc)}, ensure_ascii=True))
         return 1
     print(json.dumps(result, ensure_ascii=True, indent=2))
-    return 1 if args.befehl == "szenario" and result.get("status") == "fehler" else 0
+    return 1 if args.command == "scenario" and result.get("status") == "error" else 0
