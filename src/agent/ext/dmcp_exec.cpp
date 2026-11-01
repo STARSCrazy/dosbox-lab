@@ -7,6 +7,8 @@
 #include "agent/dmcp.h"
 #include "callback.h"
 #include "cpu.h"
+#include "control.h"
+#include "setup.h"
 #include "regs.h"
 #include "pic.h"
 #include "video.h"
@@ -129,6 +131,7 @@ JsonValue StatusObject()
     Set(&result, "halted", Bool(CPU_IsHLTed()));
     Set(&result, "pmode", Bool(cpu.pmode));
     Set(&result, "instruction_hook", Bool(DMCP_hook_active));
+    Set(&result, "hook_core", Bool(HookCoreActive())); // false: breakpoints, stepping and recordings cannot work
     Set(&result, "func", Bool(FuncActive()));
     Set(&result, "cs", Hex(SegValue(cs), 4));
     Set(&result, "eip", Hex(reg_eip, 8));
@@ -338,6 +341,24 @@ void ExecOnFrame()
     }
 }
 
+bool HookCoreActive()
+{
+    const CPU_Decoder* decoder = CPU_IsHLTed() ? cpu.hlt.old_decoder : cpudecoder;
+    return decoder == &CPU_Core_Normal_Run || decoder == &CPU_Core_Normal_Trap_Run;
+}
+
+bool RequireHookCore(const char* what, Error* error)
+{
+    // core=auto starts on the normal core and switches to the dynamic core in protected mode later.
+    const Section_prop* cpu_section = static_cast<Section_prop*>(control->GetSection("cpu"));
+    const std::string core = cpu_section != nullptr ? cpu_section->Get_string("core") : "";
+    if (core == "normal" && HookCoreActive())
+        return true;
+    return Fail(error, "unsupported_core", std::string(what) + " needs the normal CPU core ([cpu] core=normal and a "
+                "386 or newer cputype without prefetch; configured: core=" + core + "): other cores never call the "
+                "instruction hook, so breakpoints, stepping and recordings would silently not work");
+}
+
 void UpdateHookActive()
 {
     const bool needed = !g_breakpoints.empty() || !g_int_breakpoints.empty() || (g_until.active && g_until.frames_left == 0) ||
@@ -357,6 +378,8 @@ void RegisterExec()
         std::string until;
         if (Param(params, "until") != nullptr && (!ParamStr(params, "until", &until) || until != "pmode"))
             return Fail(error, "bad_argument", "until must be \"pmode\" (pause at the first protected-mode instruction)");
+        if (until == "pmode" && !RequireHookCore("emu.pause until=pmode", error))
+            return false;
         if (until == "pmode" && !(cpu.pmode && !GETFLAG(VM))) {
             Until u;
             u.reason = "pmode";
@@ -378,6 +401,8 @@ void RegisterExec()
         return true;
     });
     Register("emu.run_until", [](const JsonValue& params, JsonValue* result, Error* error) {
+        if (!RequireHookCore("emu.run_until", error))
+            return false;
         Until u;
         u.reason = "run_until";
         bool flag = false;
@@ -445,6 +470,8 @@ void RegisterExec()
     Register("emu.step", [](const JsonValue& params, JsonValue* result, Error* error) {
         if (!g_paused)
             return Fail(error, "not_paused", "emu.step requires a paused emulator (call emu.pause first)");
+        if (!RequireHookCore("emu.step", error))
+            return false;
         uint64_t count = 1;
         if (Param(params, "count") != nullptr && !ParamU64(params, "count", &count))
             return Fail(error, "bad_argument", "count must be a positive integer");
@@ -497,6 +524,8 @@ void RegisterExec()
     Register("emu.step_over", [](const JsonValue&, JsonValue* result, Error* error) {
         if (!g_paused)
             return Fail(error, "not_paused", "emu.step_over requires a paused emulator (call emu.pause first)");
+        if (!RequireHookCore("emu.step_over", error))
+            return false;
         const CodePoint here = CurrentCodePoint();
         if (!IsStepOverInstruction(here.linear)) {
             g_stop_reason = "step";
@@ -541,6 +570,8 @@ void RegisterExec()
         return true;
     });
     Register("emu.break_add", [](const JsonValue& params, JsonValue* result, Error* error) {
+        if (!RequireHookCore("emu.break_add", error))
+            return false;
         Breakpoint bp;
         if (!BreakAddress(params, &bp.address, &bp.source, error))
             return false;
@@ -635,6 +666,8 @@ void RegisterExec()
 bool DMCP_LoopHook()
 {
     dmcp::InputTick();
+    if (!dmcp::g_paused && dmcp::FuncHaltsForever())
+        dmcp::StopAt("func");
     if (!dmcp::g_paused || dmcp::g_in_step)
         return false; // nested run inside a stepped callback: let it finish
     GFX_Events();

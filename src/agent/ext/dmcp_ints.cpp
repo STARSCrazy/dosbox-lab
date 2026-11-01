@@ -305,8 +305,11 @@ void IntsOnInstruction()
     }
 }
 
+void IntsOnStateLoad() { g_open.clear(); } // open INTs of the replaced state never return
+
 void IntsOnExit(uint16_t psp)
 {
+    QuietMem quiet;
     const uint32_t paragraphs = real_readw(static_cast<uint16_t>(psp - 1), 3); // MCB size
     std::vector<OpenInt> kept;
     for (const OpenInt& open : g_open)

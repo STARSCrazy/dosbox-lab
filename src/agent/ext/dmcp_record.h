@@ -44,6 +44,7 @@ bool IntsOpen();
 void IntsOnInstruction();
 // A program ends: forget its open interrupts (they never return) and all protected-mode ones.
 void IntsOnExit(uint16_t psp);
+void IntsOnStateLoad();
 
 // --- dmcp_fileio.cpp (file access log) ---
 // CPU_Interrupt with CPU_INT_SOFTWARE: INT 21h 3Fh/40h on files, emitted as file when they return.
@@ -91,6 +92,7 @@ uint64_t CallsCurrentId();               // innermost open recorded call of the 
 
 // --- dmcp_func.cpp (function re-run) ---
 bool FuncActive();                    // a func run is going on (hook needed)
+bool FuncHaltsForever();              // loop hook: HLT with IRQs held back; ends the run with end "hlt"
 bool FuncShouldStop();                // instruction hook, before the stop checks: true = stop before this instruction
 void FuncOnInstruction();             // an instruction executes now (count, lowest stack, int returns)
 void FuncOnSoftwareInterrupt(uint8_t num, uint32_t oldeip);

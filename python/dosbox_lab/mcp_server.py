@@ -1,27 +1,52 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """MCP server (stdio) for dosbox-lab. Start: python -m dosbox_lab.mcp_server"""
+import functools
 import json
+import os
+import threading
 from typing import Optional
 
+import anyio
 from mcp.server.fastmcp import FastMCP, Image
 
 from .api import Dosbox
 from .batch import run_batch as _run_batch
 from .cli import newest_instance
 from .errors import DmcpError
-from .instance import Mount
+from .instance import Instance, Mount
 
 mcp = FastMCP("dosbox-lab")
 _boxes: dict = {}
+_owned: set = set()  # instances started by this server: stopped when the server ends
+_boxes_lock = threading.Lock()
+_register_tool = mcp.tool
+
+
+def _threaded_tool(*args, **kwargs):
+    """Like mcp.tool(), but the (blocking) tool function runs in a worker thread, so that long calls
+    (run_batch, func_run, run_until ...) do not stall the stdio loop (pings, cancellation, other tools)."""
+    register = _register_tool(*args, **kwargs)
+
+    def decorate(fn):
+        @functools.wraps(fn)
+        async def run(*a, **k):
+            return await anyio.to_thread.run_sync(functools.partial(fn, *a, **k))
+        register(run)
+        return fn
+    return decorate
+
+
+mcp.tool = _threaded_tool
 
 
 def _box(instance: Optional[str]) -> Dosbox:
     inst_id = instance or newest_instance()
     if inst_id is None:
         raise DmcpError("bad_argument", "no running instance - call dosbox_start first")
-    if inst_id not in _boxes:
-        _boxes[inst_id] = Dosbox.attach(inst_id)
-    return _boxes[inst_id]
+    with _boxes_lock:  # tools run in parallel threads now
+        if inst_id not in _boxes:
+            _boxes[inst_id] = Dosbox.attach(inst_id)
+        return _boxes[inst_id]
 
 
 @mcp.tool()
@@ -33,16 +58,23 @@ def dosbox_start(drive_c: str, commands: Optional[list[str]] = None, cdrom_d: Op
     mounts = [Mount("C", drive_c)] + ([Mount("D", cdrom_d, cdrom=True)] if cdrom_d else [])
     box = Dosbox.start(mounts=mounts, autoexec=commands or [], headless=headless)
     _boxes[box.id] = box
+    _owned.add(box.id)
     return {"instance": box.id, "output_dir": str(box.inst.outdir)}
 
 
 @mcp.tool()
 def dosbox_stop(instance: Optional[str] = None) -> dict:
     """Stop an instance."""
-    box = _box(instance)
-    box.stop()
-    _boxes.pop(box.id, None)
-    return {"stopped": box.id}
+    inst_id = instance or newest_instance()
+    if inst_id is None:
+        raise DmcpError("bad_argument", "no running instance")
+    box = _boxes.pop(inst_id, None)
+    if box is not None:
+        box.stop()
+    else:  # by PID, without connecting: works for a hanging instance too
+        Instance.stop_by_id(inst_id)
+    _owned.discard(inst_id)
+    return {"stopped": inst_id}
 
 
 @mcp.tool()
@@ -493,7 +525,7 @@ def func_run(state: str, write: Optional[list[dict]] = None, regs: Optional[dict
     calls_start(states=N)), optionally sets regs {"eax": "0x10"}, stack (hex, from SS:ESP) and write
     [{"address": "l:...", "hex": "..."}] (e.g. reconstructed code bytes), and runs until the return.
     Returns: end, regs_out, changed (memory ranges with before/after), ints. Hardware IRQs are held back unless
-    irqs=true. The emulator stays paused afterwards."""
+    irqs=true (end "hlt": the code executed HLT and waited for an IRQ). The emulator stays paused afterwards."""
     return _box(instance).func_run(state, write, regs, stack, irqs, max_instructions, name, timeout_s)
 
 
@@ -543,8 +575,17 @@ def snapshot(label: str, with_extension: bool = False, until: Optional[str] = No
 
 
 def main():
-    """Entry point of the console command dosbox-lab-mcp (stdio)."""
-    mcp.run()
+    """Entry point of the console command dosbox-lab-mcp (stdio). Instances started through dosbox_start
+    are stopped when the server ends (the client closed the session), unless DOSBOX_LAB_KEEP_INSTANCES=1."""
+    try:
+        mcp.run()
+    finally:
+        if os.environ.get("DOSBOX_LAB_KEEP_INSTANCES") != "1":
+            for inst_id in list(_owned):
+                try:
+                    _boxes[inst_id].stop() if inst_id in _boxes else Instance.stop_by_id(inst_id)
+                except (DmcpError, OSError):
+                    pass
 
 
 if __name__ == "__main__":

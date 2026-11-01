@@ -422,6 +422,8 @@ JsonValue WatchStopJson() { return AccessJson(g_stop_access, false); }
 void RegisterWatch()
 {
     Register("watch.add", [](const JsonValue& params, JsonValue* result, Error* error) {
+        if (!RequireHookCore("watch.add", error))
+            return false;
         Watch w;
         std::string text;
         if (!ParamStr(params, "address", &text))

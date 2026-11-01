@@ -46,6 +46,8 @@ bool ParamBool(const JsonValue& params, const std::string& name, bool* out);
 // Fills *error and returns false, so handlers can write `return Fail(...)`.
 bool Fail(Error* error, const std::string& code, const std::string& message);
 
+// A plain output file name: no path characters, no "..", no trailing dot/space, no Windows device name (CON ...).
+bool PlainName(const std::string& name);
 // Output files go to %DMCP_OUTDIR% (set by the Python layer), else the current directory.
 std::string OutputPath(const std::string& file_name);
 bool WriteOutputFile(const std::string& file_name, const void* data, size_t size,
@@ -76,6 +78,10 @@ void InputTick();
 bool InputOwned();
 void RegisterScreen();
 
+// dmcp_exec.cpp: true if the CPU core that runs now calls the instruction hook (only the normal core does;
+// dynamic, simple, full, prefetch and 286/8086 cores do not). RequireHookCore fails with unsupported_core.
+bool HookCoreActive();
+bool RequireHookCore(const char* what, Error* error);
 // dmcp_exec.cpp: recompute DMCP_hook_active after any change of breakpoints, pause conditions or recordings.
 void UpdateHookActive();
 // dmcp_exec.cpp: pause with the given stop_reason (clears the skip flag); resume like emu.continue.
@@ -92,6 +98,9 @@ void ExecOnFrame();
 bool RecordingNeedsHook();
 // dmcp_record.cpp: called for every instruction that executes now (not for one the agent stops before).
 void RecordInstruction();
+
+// dmcp_modules.cpp: command tail of a PSP (printable ASCII, others as '?'), read without triggering watches.
+std::string CommandTailOf(uint16_t psp);
 
 // While > 0, memory accesses made by the agent itself (disassembler) do not trigger watches (dmcp_watch.cpp).
 int& QuietDepth();
@@ -116,6 +125,9 @@ void LeOnExec(const char* raw_name, const std::string& module_name, uint16_t fla
 void LeOnSoftwareInterrupt(uint8_t num, uint32_t oldeip);
 void LeOnInstruction();
 void LeOnExit(uint16_t psp);
+void LeOnStateLoad();
+// dmcp_input.cpp: after state.load (before_ms = PIC_FullIndex() before loading).
+void InputOnStateLoad(double before_ms);
 // DMCP_OnExit: a program ended during the capture (errorlevel for batch.json / batch.status last_exit_code).
 void BatchOnExit(uint16_t psp, uint8_t exit_code);
 

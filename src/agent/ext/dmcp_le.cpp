@@ -256,6 +256,8 @@ void LeOnInstruction()
     OnAllocation(g_int.size, (static_cast<uint32_t>(reg_bx) << 16) | reg_cx);
 }
 
+void LeOnStateLoad() { StopObserving(); } // the derivation belongs to the replaced state
+
 void LeOnExit(uint16_t psp)
 {
     if (g_pending.empty())

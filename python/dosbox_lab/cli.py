@@ -2,12 +2,12 @@
 """Command line: a thin shell around the library. Output is always JSON."""
 import argparse
 import json
-import sys
+import shutil
 
 from .api import Dosbox
 from .batch import run_batch
 from .errors import DmcpError
-from .instance import RUNS, Mount, _pid_alive
+from .instance import RUNS, Instance, Mount, _pid_alive
 from .scenario import play_scenario
 
 
@@ -22,6 +22,16 @@ def _instances():
             continue  # skip broken or half-written leftovers
         found.append(info)
     return sorted(found, key=lambda i: i["_mtime"], reverse=True)
+
+
+def clean_runs():
+    """Delete the run folders of instances that are no longer running."""
+    removed = []
+    for info in _instances():
+        if not info["running"]:
+            shutil.rmtree(RUNS / info["id"], ignore_errors=True)
+            removed.append(info["id"])
+    return {"removed": removed}
 
 
 def newest_instance():
@@ -78,7 +88,7 @@ def build_parser():
     s.add_argument("--window", action="store_true", help="show the emulator window instead of running headless")
     s.add_argument("--open", action="store_true", help="leave the emulator running at the end")
     s.add_argument("--output-dir", help="output directory instead of .runs/<id>/out")
-    for name in ("stop", "list", "status", "resume", "regs", "text", "video", "events-stop", "cov-stop",
+    for name in ("stop", "list", "clean", "status", "resume", "regs", "text", "video", "events-stop", "cov-stop",
                  "flow-stop", "modules", "calls-stop", "calls-status"):
         add(name)
     s = add("pause"); s.add_argument("--until", choices=["pmode"])
@@ -170,13 +180,15 @@ def run(args):
         _box, result = play_scenario(args.file, variables=variables, headless=not args.window,
                                        stop_at_end=not args.open, output_dir=args.output_dir)
         return result
+    if args.command == "clean":
+        return clean_runs()
     inst_id = args.id or newest_instance()
     if inst_id is None:
         raise DmcpError("bad_argument", "no running instance (run start first)")
-    box = Dosbox.attach(inst_id)
-    if args.command == "stop":
-        box.stop()
+    if args.command == "stop":  # by PID, without connecting: works for a hanging instance too
+        Instance.stop_by_id(inst_id)
         return {"stopped": inst_id}
+    box = Dosbox.attach(inst_id)
     if args.command == "status": return box.status()
     if args.command == "resume": return box.resume()
     if args.command == "step": return box.step(args.count)

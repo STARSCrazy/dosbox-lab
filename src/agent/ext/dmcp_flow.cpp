@@ -331,6 +331,8 @@ void FlowOnInterrupt(uint8_t num, unsigned type)
 void RegisterFlow()
 {
     Register("flow.start", [](const JsonValue& params, JsonValue* result, Error* error) {
+        if (!RequireHookCore("flow.start", error))
+            return false;
         bool indirect = true, ring = true, returns = false;
         uint64_t ring_size = 4096, max_pairs = 1000000;
         if (!OptionalBool(params, "indirect", &indirect, error) || !OptionalBool(params, "ring", &ring, error) ||

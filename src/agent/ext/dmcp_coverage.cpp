@@ -243,6 +243,8 @@ void CoverageOnInstruction(uint32_t linear)
 void RegisterCoverage()
 {
     Register("coverage.start", [](const JsonValue& params, JsonValue* result, Error* error) {
+        if (!RequireHookCore("coverage.start", error))
+            return false;
         uint64_t max_blocks = 4096;
         bool keep = false;
         if (Param(params, "max_blocks") != nullptr &&

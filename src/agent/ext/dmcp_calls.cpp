@@ -88,11 +88,6 @@ std::map<uint32_t, std::pair<CodePoint, uint64_t>> g_omitted; // target linear -
 uint64_t g_states_written = 0;
 uint64_t g_states_dropped = 0; // over max_states
 
-bool PlainName(const std::string& name)
-{
-    return !name.empty() && name.find_first_of("\\/:*?\"<>|") == std::string::npos;
-}
-
 bool LinearOf(const std::string& text, Address* out, Error* error)
 {
     if (!ParseAddress(text, out, error))
@@ -665,6 +660,7 @@ void CallsOnExit(uint16_t psp)
     DropContextsFrom(1);
     if (!g_active)
         return;
+    QuietMem quiet;
     const uint32_t paragraphs = real_readw(static_cast<uint16_t>(psp - 1), 3); // MCB size
     Context& c = g_contexts.front();
     for (size_t i = 0; i < c.frames.size(); ++i) {
@@ -719,6 +715,8 @@ uint64_t CallsCurrentId()
 void RegisterCalls()
 {
     Register("calls.start", [](const JsonValue& params, JsonValue* result, Error* error) {
+        if (!RequireHookCore("calls.start", error))
+            return false;
         Config cfg;
         if (!ParseConfig(params, &cfg, error))
             return false;

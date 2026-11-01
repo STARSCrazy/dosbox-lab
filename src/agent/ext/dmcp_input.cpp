@@ -305,6 +305,16 @@ int ButtonIndex(const std::string& name)
 
 } // namespace
 
+void InputOnStateLoad(double before_ms)
+{
+    // Due times are PIC_FullIndex() values, which jump with the loaded state: keep the remaining delays.
+    const double shift = PIC_FullIndex() - before_ms;
+    for (KeyEvent& event : g_queue)
+        event.due_ms += shift;
+    if (g_next_free_ms != 0.0)
+        g_next_free_ms += shift;
+}
+
 void InputTick()
 {
     if (g_queue.empty())

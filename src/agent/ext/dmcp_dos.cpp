@@ -39,17 +39,6 @@ std::string PrintableName(const char* name)
     return out;
 }
 
-std::string Tail(uint16_t psp)
-{
-    const uint32_t base = static_cast<uint32_t>(psp) << 4;
-    const uint8_t len = phys_readb(static_cast<PhysPt>(base + 0x80));
-    std::string tail;
-    for (uint8_t i = 0; i < len && i < 127; ++i) {
-        const uint8_t c = phys_readb(static_cast<PhysPt>(base + 0x81 + i));
-        tail.push_back(c >= 0x20 && c < 0x7F ? static_cast<char>(c) : '?');
-    }
-    return tail;
-}
 
 std::string SegOffText(uint32_t realpt)
 {
@@ -117,7 +106,7 @@ void RegisterDos()
             const uint32_t mcb = base - 16;
             const bool own_mcb = phys_readw(static_cast<PhysPt>(mcb + 1)) == psp;
             Set(&entry, "name", Str(own_mcb ? Name8(mcb + 8) : std::string()));
-            Set(&entry, "command_line", Str(Tail(psp)));
+            Set(&entry, "command_line", Str(CommandTailOf(psp)));
             Set(&entry, "current", Bool(first));
             for (const Module& m : Modules()) {
                 if (m.has_load && m.psp == psp && m.kind != "overlay") {
