@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Builds dosbox-lab on Linux/macOS (autotools, SDL2) with the debugger, the agent and the dosbox-lab extension.
+# The binary is src/dosbox-x; the Python package finds it there (or set DOSBOX_LAB_EXE).
+#
+#   ./build-lab            configure (first run) and build
+#   ./build-lab --clean    regenerate, reconfigure and rebuild everything
+#   ./build-lab -- ARGS    pass extra arguments to ./configure
+set -euo pipefail
+cd "$(dirname "$0")"
+
+clean=0
+configure_args=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --clean) clean=1 ;;
+        --) shift; configure_args=("$@"); break ;;
+        -h|--help) sed -n '3,8p' "$0"; exit 0 ;;
+        *) echo "unknown option: $1 (see --help)" >&2; exit 2 ;;
+    esac
+    shift
+done
+
+if ! command -v sdl2-config >/dev/null 2>&1; then
+    echo "sdl2-config not found: install the SDL2 development package (e.g. libsdl2-dev)" >&2
+    exit 1
+fi
+
+jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2)
+
+if [ "$clean" = 1 ] && [ -f Makefile ]; then
+    make distclean >/dev/null 2>&1 || true
+fi
+if [ "$clean" = 1 ] || [ ! -x configure ]; then
+    ./autogen.sh
+fi
+if [ "$clean" = 1 ] || [ ! -f config.status ] || ! grep -q -- '--enable-dmcp' config.status; then
+    ./configure --enable-debug --enable-dmcp --enable-sdl2 ${configure_args[@]+"${configure_args[@]}"}
+fi
+make -j"$jobs"
+ls -l src/dosbox-x

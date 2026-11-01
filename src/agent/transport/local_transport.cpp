@@ -1,3 +1,5 @@
+// DOSBOX-LAB hook: config.h first, the autotools build defines C_DEBUG/C_DOSBOX_AGENT there
+#include "config.h"
 #if defined(C_DEBUG) && defined(C_DOSBOX_AGENT)
 #include "rpc_transport.h"
 
@@ -11,6 +13,14 @@
 #include <windows.h>
 #include <sddl.h>
 #pragma comment(lib, "Advapi32.lib")
+#else
+// DOSBOX-LAB hook: POSIX headers for the Unix socket transport
+#include <cerrno>
+#include <cstring>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#include <unistd.h>
 #endif
 
 namespace dosbox_agent {
@@ -289,8 +299,13 @@ private:
 #endif
 };
 
+// DOSBOX-LAB hook: Unix domain socket transport (Linux, macOS), JSON Lines like the named pipe.
+// The socket file gets mode 0600; the Python layer also puts it into a private directory.
 class UnixSocketTransport final : public IRpcTransport {
 public:
+    UnixSocketTransport() : impl(new Impl()) {}
+    ~UnixSocketTransport() override { Stop(); }
+
     const char* Name() const override { return "unix_socket"; }
 
     bool ValidateConfiguration(const AgentConfig& config,
@@ -301,19 +316,201 @@ public:
                 *error = "Unix socket endpoint must be an absolute path";
             return false;
         }
+#ifndef WIN32
+        if (config.endpoint.size() >= sizeof(((sockaddr_un*)0)->sun_path)) {
+            if (error != NULL)
+                *error = "Unix socket endpoint path is too long";
+            return false;
+        }
+#endif
         return true;
     }
 
-    bool Start(const AgentConfig&,
-               RequestHandler,
+    bool Start(const AgentConfig& config,
+               RequestHandler handler,
                std::string* error) override
     {
+        if (!ValidateConfiguration(config, error) || !handler)
+            return false;
+#ifdef WIN32
         if (error != NULL)
-            *error = "Unix socket transport is outside the Windows v1 scope";
+            *error = "Unix socket transport is unavailable on Windows";
         return false;
+#else
+        std::lock_guard<std::mutex> lock(impl->mutex);
+        if (impl->listener.joinable()) {
+            if (error != NULL)
+                *error = "Unix socket transport is already running";
+            return false;
+        }
+        const int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+        if (fd < 0) {
+            if (error != NULL)
+                *error = std::string("Unable to create Unix socket: ") + strerror(errno);
+            return false;
+        }
+        sockaddr_un address;
+        memset(&address, 0, sizeof(address));
+        address.sun_family = AF_UNIX;
+        memcpy(address.sun_path, config.endpoint.c_str(), config.endpoint.size());
+        // A socket file left over from a crashed instance would make bind fail.
+        struct stat info;
+        if (lstat(config.endpoint.c_str(), &info) == 0 && S_ISSOCK(info.st_mode))
+            unlink(config.endpoint.c_str());
+        if (bind(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
+            chmod(config.endpoint.c_str(), S_IRUSR | S_IWUSR) != 0 ||
+            listen(fd, 4) != 0) {
+            if (error != NULL)
+                *error = std::string("Unable to create Unix socket endpoint: ") + strerror(errno);
+            close(fd);
+            unlink(config.endpoint.c_str());
+            return false;
+        }
+        impl->config = config;
+        impl->handler = handler;
+        impl->stopping = false;
+        impl->listen_fd = fd;
+        impl->listener = std::thread(&UnixSocketTransport::Run, this);
+        return true;
+#endif
     }
 
-    void Stop() override {}
+    void Stop() override
+    {
+#ifndef WIN32
+        std::thread listener;
+        std::vector<std::thread> client_workers;
+        {
+            std::lock_guard<std::mutex> lock(impl->mutex);
+            if (!impl->listener.joinable())
+                return;
+            impl->stopping = true;
+            // shutdown wakes up the blocking accept/recv calls
+            shutdown(impl->listen_fd, SHUT_RDWR);
+            for (std::vector<int>::const_iterator it = impl->client_fds.begin(); it != impl->client_fds.end(); ++it)
+                shutdown(*it, SHUT_RDWR);
+            listener.swap(impl->listener);
+        }
+        listener.join();
+        {
+            std::lock_guard<std::mutex> lock(impl->mutex);
+            client_workers.swap(impl->client_workers);
+        }
+        for (std::vector<std::thread>::iterator it = client_workers.begin(); it != client_workers.end(); ++it)
+            if (it->joinable())
+                it->join();
+        close(impl->listen_fd);
+        impl->listen_fd = -1;
+        unlink(impl->config.endpoint.c_str());
+#endif
+    }
+
+private:
+    class Impl {
+    public:
+        std::mutex mutex;
+        AgentConfig config;
+        RequestHandler handler;
+        std::thread listener;
+        bool stopping = false;
+        int listen_fd = -1;
+        std::vector<int> client_fds;
+        std::vector<std::thread> client_workers;
+    };
+
+    std::unique_ptr<Impl> impl;
+
+#ifndef WIN32
+    static bool WriteAll(const int fd, const std::string& message)
+    {
+        std::size_t offset = 0;
+        while (offset < message.size()) {
+#ifdef MSG_NOSIGNAL
+            const ssize_t written = send(fd, message.data() + offset, message.size() - offset, MSG_NOSIGNAL);
+#else
+            const ssize_t written = send(fd, message.data() + offset, message.size() - offset, 0);
+#endif
+            if (written < 0 && errno == EINTR)
+                continue;
+            if (written <= 0)
+                return false;
+            offset += static_cast<std::size_t>(written);
+        }
+        return true;
+    }
+
+    bool ServeClient(const int fd)
+    {
+        std::string pending;
+        char buffer[4096];
+        for (;;) {
+            const ssize_t got = recv(fd, buffer, sizeof(buffer), 0);
+            if (got < 0 && errno == EINTR)
+                continue;
+            if (got <= 0)
+                return false;
+            pending.append(buffer, static_cast<std::size_t>(got));
+
+            for (;;) {
+                const std::string::size_type line_end = pending.find('\n');
+                if (line_end == std::string::npos) {
+                    if (pending.size() > impl->config.max_message_bytes) {
+                        WriteAll(fd, impl->handler(std::string(impl->config.max_message_bytes + 1, 'x')) + "\n");
+                        return false;
+                    }
+                    break;
+                }
+                std::string request = pending.substr(0, line_end);
+                pending.erase(0, line_end + 1);
+                if (!request.empty() && request[request.size() - 1] == '\r')
+                    request.erase(request.size() - 1);
+                if (request.size() > impl->config.max_message_bytes) {
+                    WriteAll(fd, impl->handler(std::string(impl->config.max_message_bytes + 1, 'x')) + "\n");
+                    return false;
+                }
+                if (!WriteAll(fd, impl->handler(request) + "\n"))
+                    return false;
+            }
+
+            std::lock_guard<std::mutex> lock(impl->mutex);
+            if (impl->stopping)
+                return false;
+        }
+    }
+
+    void ServeClientThread(const int fd)
+    {
+        ServeClient(fd);
+        std::lock_guard<std::mutex> lock(impl->mutex);
+        for (std::vector<int>::iterator it = impl->client_fds.begin(); it != impl->client_fds.end(); ++it) {
+            if (*it == fd) {
+                impl->client_fds.erase(it);
+                break;
+            }
+        }
+        close(fd);
+    }
+
+    void Run()
+    {
+        for (;;) {
+            const int fd = accept(impl->listen_fd, NULL, NULL);
+            std::lock_guard<std::mutex> lock(impl->mutex);
+            if (impl->stopping) {
+                if (fd >= 0)
+                    close(fd);
+                return;
+            }
+            if (fd < 0) {
+                if (errno == EINTR || errno == ECONNABORTED)
+                    continue;
+                return;
+            }
+            impl->client_fds.push_back(fd);
+            impl->client_workers.push_back(std::thread(&UnixSocketTransport::ServeClientThread, this, fd));
+        }
+    }
+#endif
 };
 
 } // namespace

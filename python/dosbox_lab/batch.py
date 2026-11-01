@@ -118,7 +118,8 @@ def run_batch(mounts, command, timeout_s=60.0, max_output=STANDARD_MAX_OUTPUT, c
     before, full_before = _snapshot_files(mounts)
     autoexec = [f"@Z:\\DMCPBAT.COM START {max_output}", f"@CALL {command}", "@Z:\\DMCPBAT.COM END"]
     started = time.monotonic()
-    inst = Instance.start(mounts=list(mounts), autoexec=autoexec, headless=True, exe=exe, conf=merged)
+    inst = Instance.start(mounts=list(mounts), autoexec=autoexec, headless=True, exe=exe, conf=merged,
+                          early_exit_ok=True)  # EXIT in the command may end the emulator before we connect
     result = {"instance": inst.id, "command": command}
     status, batch = "timeout", None
     try:

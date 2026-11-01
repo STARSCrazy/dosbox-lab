@@ -1,3 +1,5 @@
+// DOSBOX-LAB hook: config.h first, the autotools build defines C_DEBUG/C_DOSBOX_AGENT there
+#include "config.h"
 #if defined(C_DEBUG) && defined(C_DOSBOX_AGENT)
 #include "dosbox.h"
 #include "agent/debugger_adapter.h"
