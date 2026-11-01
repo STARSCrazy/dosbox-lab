@@ -1,18 +1,14 @@
-Add a summary of the change(s) brought by this PR here.
+## Summary
 
-## What issue(s) does this PR address?
+What does this change do, and why?
 
-If there are any related issues, reference them here. Ex. #⁠1234, Fixes #⁠1234, Closes #⁠1234, etc.
-<!-- (For more information on using keywords like in above, read this document: https://docs.github.com/en/github/writing-on-github/working-with-advanced-formatting/using-keywords-in-issues-and-pull-requests) -->
+## Related issues
 
-## Does this PR introduce new feature(s)?
+Fixes #...
 
-If yes, describe the feature(s) introduced.
+## Checklist
 
-## Does this PR introduce any breaking change(s)?
-
-If yes, describe the breaking change(s) in detail.
-
-## Additional information
-
-Add any additional information here.
+- [ ] Changes to DOSBox-X files are minimal and each hook is marked with `// DOSBOX-LAB hook`
+- [ ] Tests added or updated in `python/tests/` (and run: `python -m unittest discover -s tests -t .`)
+- [ ] `docs/dosbox-lab/tools.md` / `formats.md` updated if tools, parameters or file formats changed
+- [ ] New files carry `SPDX-License-Identifier: GPL-2.0-or-later`

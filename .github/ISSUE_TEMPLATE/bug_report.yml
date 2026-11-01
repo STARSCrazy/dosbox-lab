@@ -1,100 +1,76 @@
 name: Bug report
-description: File a bug report to help us improve DOSBox-X
+description: Something in dosbox-lab (MCP server, Python API, CLI, control channel, recordings) does not work
 labels: bug
 
 body:
   - type: markdown
     attributes:
       value: |
-        ### Please fill out the form as cleanly as possible.
-        It's highly recommended for you to fill in all the fields (even optional ones) if possible, so it's easier for us to solve the problem. Also, make sure that you have properly filled in the title of the bug report.
+        Problems with the emulation itself (CPU, DOS, video, sound, a game that does not run) that also occur in plain DOSBox-X belong to the [DOSBox-X issue tracker](https://github.com/joncampbell123/dosbox-x/issues).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - MCP server / MCP tool
+        - Python API
+        - Command line (dosbox-lab)
+        - Recordings (coverage, flow, calls, file log, events)
+        - Breakpoints, watchpoints, stepping
+        - Save states, function re-run
+        - Batch runs (run_batch)
+        - Scenarios
+        - Build
+        - Other
+    validations:
+      required: true
   - type: textarea
     id: issue
     attributes:
-      label: Describe the bug
-      description: A clear and concise description of what the bug is. If applicable, add screenshots to help in explaining.
+      label: What happens
+      description: Include the tool call, API call or command and the error or wrong result you got.
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: Steps to reproduce the behaviour
-      description: How can we reproduce this bug? For example, doing what actions in what software causes the bug to occur?
-      placeholder: |
-        1. Go to '...'
-        2. Click on '....'
-        3. Scroll down to '....'
-        4. See error
+      label: Steps to reproduce
+      description: Ideally with one of the programs in `testprogs/` or a small script. Mention the DOS program if it is publicly available.
     validations:
       required: true
   - type: textarea
-    id: excepted
+    id: expected
     attributes:
-      label: Expected behavior
-      description: A clear and concise description of what did you expect to happen. If applicable, add screenshots to help in explaining.
+      label: Expected behaviour
     validations:
       required: false
-  - type: input
-    id: os
-    attributes:
-      label: What operating system(s) this bug have occurred on?
-      description: Put in the release name of the OS (additionally with an extra version number and/or an architecture name) this problem have occurred on.
-      placeholder: "Ex. Windows 10 21H2 64-bit, Ubuntu 21.04 etc."
-    validations:
-      required: true
-  # This is confusing
-  #- type: input
-  #  id: hardware
-  #  attributes:
-  #    label: Relevant hardware info
-  #    description: If relevant, describe the hardware this bug have occurred on.
-  #    placeholder: "CPU, GPU, device brand/model, installed drivers, etc. Ex. Raspberry Pi 3B+, etc."
-  #  validations:
-  #    required: false
   - type: input
     id: version
     attributes:
-      label: What version(s) of DOSBox-X have this bug?
-      description: Put in the release version or git commit/branch and additionally the flavor of the DOSBox-X build this problem occurred on. Though, please always check if the bug occurs in the latest version/commit.
-      placeholder: "Ex. 0.83.17 SDL1 Visual Studio, commit 88370683291f5c681d2a7d6fff088b947b783bd4 SDL1 etc."
+      label: dosbox-lab commit
+      placeholder: "git rev-parse --short HEAD"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Windows version, Python version, Visual Studio toolset, MCP client (if used)
+      placeholder: "Windows 11 24H2, Python 3.12, v142, Claude Code"
     validations:
       required: true
   - type: textarea
-    id: config
-    attributes:
-      label: Used configuration
-      description: Share your options (e.g.`dosbox-x.conf`) that caused the bug to occur. Using command `config -wc filename.conf -mod -norem` will save a file with only the options you modified. You may upload and put the link of your config in the "Additional information" box instead.
-      render: ini # Syntax highlighting
-    validations:
-      required: false
-  - type: textarea
     id: log
     attributes:
-      label: Output log
-      description: The log may include hints to solve your problem. Enable logging in the dosbox-x.conf file or launch DOSBox-X by `dosbox-x -console` to get one. You may upload and put the link of your log in the "Additional information" box instead.
-      render: text # Syntax highlighting
+      label: Logs
+      description: Relevant files from the run folder (`.runs/<instance>/`), e.g. the emulator log, or the Python traceback.
+      render: text
     validations:
       required: false
-  - type: textarea
-    id: context
-    attributes:
-      label: Additional information
-      description: Add more information about the problem here.
-    validations:
-      required: false
-  - type: checkboxes
-    id: alreadyexists
-    attributes:
-      label: Have you checked that no similar bug report(s) exist?
-      description: Please try to search for this bug in the issues before creating this bug report.
-      options:
-        - label: I have searched and didn't find any similar bug report.
-          required: true
   - type: checkboxes
     id: terms
     attributes:
-      label: Code of Conduct & Contributing Guidelines
-      description: By submitting this issue, you agree to follow our [contributing guidelines](https://github.com/joncampbell123/dosbox-x/blob/master/CONTRIBUTING.md) and [code of conduct](https://github.com/joncampbell123/dosbox-x/blob/master/CODE_OF_CONDUCT.md).
+      label: Code of conduct
       options:
-        - label: I agree to follow the code of conduct and the contributing guidelines.
+        - label: I agree to follow the [code of conduct](https://github.com/STARSCrazy/dosbox-lab/blob/main/CODE_OF_CONDUCT.md).
           required: true
