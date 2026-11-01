@@ -29,7 +29,7 @@ struct Symbol {
     std::string kind;
 };
 
-// D27: LE objects of the executed file and their derived placement (dmcp_le.cpp).
+// LE objects of the executed file and their derived placement (dmcp_le.cpp).
 struct LeObject {
     uint32_t va_start = 0; // relocation base address of the object
     uint32_t size = 0;     // virtual size
@@ -63,7 +63,7 @@ struct Module {
     uint32_t csip = 0;                   // entry point seg:off (high word segment)
     uint32_t sssp = 0;                   // initial stack seg:off
     std::string command_line;            // command tail at EXEC
-    LeInfo le;                           // D27, only for EXEs with an LE header
+    LeInfo le;                           // only for EXEs with an LE header
 };
 
 std::vector<Module>& Modules();

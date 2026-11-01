@@ -46,7 +46,7 @@ struct Config {
     int stack_bytes = -1; // -1 = 32 (16-bit target) / 64 (32-bit target)
     uint64_t max_per_target = 1000;
     uint64_t max_bytes = 256ull << 20;
-    uint64_t states = 0;      // D31: savestate at the entry of the first N recorded calls per target
+    uint64_t states = 0;      // savestate at the entry of the first N recorded calls per target
     uint64_t max_states = 1000;
 };
 
@@ -479,7 +479,7 @@ void ReturnPoint(const Transfer& t, uint16_t* sel, uint32_t* off, uint16_t* fram
     *sp_after = t.sp_before;
 }
 
-// D31: savestate at the first instruction of the target (before it executes); the sidecar names the return.
+// Savestate at the first instruction of the target (before it executes); the sidecar names the return.
 void SaveEntryState(Frame& f, const Transfer& t, int bits)
 {
     if (g_states_written >= g_cfg.max_states) {

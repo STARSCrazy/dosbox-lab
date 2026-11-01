@@ -170,7 +170,7 @@ class StateTest(unittest.TestCase):
 
 @need_build
 class StateEarlyLoadTest(unittest.TestCase):
-    """Loading before the DOS shell is running used to crash the emulator (acceptance D31)."""
+    """Loading before the DOS shell is running used to crash the emulator."""
 
     def test_load_before_shell_is_refused_not_crash(self):
         donor = start_idle()
@@ -214,8 +214,8 @@ class StateEarlyLoadTest(unittest.TestCase):
 
 @need_build
 class StateAfterBootTest(unittest.TestCase):
-    """After BOOT of a guest system the DOS kernel is gone again; loading used to crash the emulator then
-    (review D31). Expected: a clean rejection not_ready, emulator alive."""
+    """After BOOT of a guest system the DOS kernel is gone again; loading used to crash the emulator then.
+    Expected: a clean rejection not_ready, emulator alive."""
 
     def test_load_after_boot(self):
         import shutil

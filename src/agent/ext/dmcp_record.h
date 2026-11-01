@@ -45,7 +45,7 @@ void IntsOnInstruction();
 // A program ends: forget its open interrupts (they never return) and all protected-mode ones.
 void IntsOnExit(uint16_t psp);
 
-// --- dmcp_fileio.cpp (D34) ---
+// --- dmcp_fileio.cpp (file access log) ---
 // CPU_Interrupt with CPU_INT_SOFTWARE: INT 21h 3Fh/40h on files, emitted as file when they return.
 void FileIoOnSoftwareInterrupt(uint8_t num, uint32_t oldeip);
 bool FileIoOpen();
@@ -72,7 +72,7 @@ void FlowOnStateLoad(); // drops the pending transfer of the replaced state
 void FlowOnInstruction(uint32_t linear);
 void FlowOnInterrupt(uint8_t num, unsigned type);
 
-// --- dmcp_calls.cpp (D29) ---
+// --- dmcp_calls.cpp (call log) ---
 enum class TransferKind : uint8_t { CallNear, CallFar, Int, Irq, Exception, Ret, Retf, Iret };
 struct Transfer {
     TransferKind kind;
@@ -89,7 +89,7 @@ void CallsOnExit(uint16_t psp);
 void CallsOnStateLoad();
 uint64_t CallsCurrentId();               // innermost open recorded call of the current context, 0 = none
 
-// --- dmcp_func.cpp (D31) ---
+// --- dmcp_func.cpp (function re-run) ---
 bool FuncActive();                    // a func run is going on (hook needed)
 bool FuncShouldStop();                // instruction hook, before the stop checks: true = stop before this instruction
 void FuncOnInstruction();             // an instruction executes now (count, lowest stack, int returns)

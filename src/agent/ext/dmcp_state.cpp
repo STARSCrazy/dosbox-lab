@@ -250,7 +250,7 @@ bool LoadStateFile(const std::string& path, bool unchecked, JsonValue* sidecar, 
 {
     *sidecar = JsonValue();
     // Loading while the DOS shell is not up crashes the emulator: during the start, and also after BOOT of a guest
-    // OS (the DOS kernel is off again then; seen in the D31 review).
+    // OS (the DOS kernel is off again then).
     if (dos_kernel_disabled || first_shell == nullptr || DOS_ShellGetPSP() == 0)
         return Fail(error, "not_ready",
                     "DOS shell is not up (emulator still starting, or a guest OS was booted); loading would crash");

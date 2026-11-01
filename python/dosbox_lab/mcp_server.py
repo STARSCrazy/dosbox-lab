@@ -25,13 +25,13 @@ def _box(instance: Optional[str]) -> Dosbox:
 
 
 @mcp.tool()
-def dosbox_start(drive_c: str, commands: list[str] = [], cdrom_d: Optional[str] = None,
+def dosbox_start(drive_c: str, commands: Optional[list[str]] = None, cdrom_d: Optional[str] = None,
                  headless: bool = False) -> dict:
     """Start an emulator instance. drive_c: host directory for C:. commands: autoexec lines
     (e.g. ["GAME.EXE"]). cdrom_d: optional host directory mounted as CD drive D:. headless: no window.
     Returns the instance id and the output directory."""
     mounts = [Mount("C", drive_c)] + ([Mount("D", cdrom_d, cdrom=True)] if cdrom_d else [])
-    box = Dosbox.start(mounts=mounts, autoexec=commands, headless=headless)
+    box = Dosbox.start(mounts=mounts, autoexec=commands or [], headless=headless)
     _boxes[box.id] = box
     return {"instance": box.id, "output_dir": str(box.inst.outdir)}
 

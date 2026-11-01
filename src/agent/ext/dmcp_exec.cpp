@@ -84,7 +84,7 @@ struct Until {
     Expr expr;
 };
 Until g_until;
-uint64_t g_frames = 0; // finished frames since start (D35)
+uint64_t g_frames = 0; // finished frames since start
 
 bool UntilMet(uint32_t here)
 {
@@ -297,7 +297,7 @@ void StopAt(const std::string& reason)
     g_paused = true;
     g_stop_reason = reason;
     g_skip_break_once = false; // a stop never leaves the skip flag behind (stage-2 parked point)
-    FuncOnStop();              // D31: a running func measures its result at any stop
+    FuncOnStop();              // a running func measures its result at any stop
 }
 
 void Resume()

@@ -30,7 +30,7 @@ bool DMCP_irq_hold = false; // pic.cpp: hardware IRQs wait while a func run hold
 namespace dmcp {
 namespace {
 
-// D31: one recorded call, run again from its savestate up to the return.
+// One recorded call, run again from its savestate up to the return.
 struct Run {
     bool active = false;   // running; the result is measured at the next stop (StopAt)
     bool finished = false; // result is ready
@@ -74,7 +74,7 @@ Run g;
 
 uint32_t CurrentSp() { return reg_esp & cpu.stack.mask; }
 
-// Same register set as calls.jsonl (D29).
+// Same register set as calls.jsonl.
 JsonValue RegsJson()
 {
     JsonValue r = JsonValue::Object();

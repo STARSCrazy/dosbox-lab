@@ -16,7 +16,7 @@ using dosbox_agent::JsonType;
 using dosbox_agent::JsonValue;
 
 struct Error {
-    std::string code;     // see Global Constraints of the stage-1 plan
+    std::string code;     // machine-readable, e.g. "bad_argument", "bad_address", "not_ready"
     std::string message;
 };
 
@@ -62,7 +62,7 @@ void RegisterEvents();
 void RegisterCoverage();
 void RegisterFlow();
 void RegisterCalls();
-// dmcp_func.cpp (D31): run one recorded call again.
+// dmcp_func.cpp: run one recorded call again.
 void RegisterFunc();
 // dmcp_exec.cpp: stop_reason of the current pause ("none" while running).
 const std::string& StopReason();
@@ -109,7 +109,7 @@ void RegisterDos();
 void RegisterBatch();
 void BatchOnExec(const std::string& path, bool load_and_run);
 
-// dmcp_le.cpp (D27): derive the linear placement of LE objects from DPMI 0501h allocations.
+// dmcp_le.cpp: derive the linear placement of LE objects from DPMI 0501h allocations.
 bool LeActive(); // a derivation is open: the instruction hook must stay on
 void LeOnExec(const char* raw_name, const std::string& module_name, uint16_t flags);
 // Observation: INT 31h AX=0501h entry (hook), its return (instruction hook), end of the program.

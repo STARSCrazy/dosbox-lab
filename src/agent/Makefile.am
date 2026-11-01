@@ -24,7 +24,7 @@ libagent_a_SOURCES = \
 	ext/dmcp_expr.cpp \
 	ext/dmcp_flow.cpp \
 	ext/dmcp_calls.cpp \
-text/dmcp_func.cpp 
+	ext/dmcp_func.cpp \
 	ext/dmcp_fileio.cpp \
 	ext/dmcp_disasm.cpp \
 	ext/dmcp_watch.cpp \
