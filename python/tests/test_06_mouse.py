@@ -50,6 +50,8 @@ def mouse_block(box):
 
 
 @need_build
+@unittest.skipUnless(os.name == "nt" or os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"),
+                     "needs a visible window: run under a desktop or xvfb-run")
 class MouseTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
