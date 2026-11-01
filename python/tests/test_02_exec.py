@@ -86,7 +86,7 @@ class ExecTest(unittest.TestCase):
         self.assertEqual(self.box.set_register("edi", "C0DE")["gp"]["edi"], "0000C0DE")
 
     def test_raw_rpc_numeric_strings(self):
-        # Raw RPC: a number as a string is decimal (never octal), only "0x" means hex (B5).
+        # Raw RPC: a number as a string is decimal (never octal), only "0x" means hex.
         self.box.pause()
         old = self.box.registers()["gp"]["ebx"]
         self.addCleanup(self.box.set_register, "ebx", old)

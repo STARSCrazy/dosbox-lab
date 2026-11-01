@@ -263,16 +263,20 @@ JsonValue AddressJson(const Address& a, bool file_format)
 
 void ReadAddress(const Address& address, uint8_t* out, size_t len, RangeList* missing)
 {
-    if (!address.has_linear) { // physical: bytes beyond guest RAM read as 0 and are listed as missing
-        for (size_t i = 0; i < len; ++i) {
-            const uint64_t phys = static_cast<uint64_t>(address.phys) + i;
+    if (!address.has_linear) { // physical: bytes that are not plain memory read as 0 and are listed as missing
+        size_t done = 0;
+        while (done < len) {
+            const uint64_t phys = static_cast<uint64_t>(address.phys) + done;
+            const size_t in_page = 0x1000u - static_cast<size_t>(phys & 0xFFFu);
+            const size_t chunk = in_page < len - done ? in_page : len - done;
             HostPt host = phys <= 0xFFFFFFFFull ? PhysHostPtr(static_cast<uint32_t>(phys), false) : nullptr;
             if (host != nullptr) {
-                out[i] = *host;
+                std::memcpy(out + done, host, chunk);
             } else {
-                out[i] = 0;
-                AddMissing(missing, static_cast<uint32_t>(phys), static_cast<uint32_t>(phys + 1));
+                std::memset(out + done, 0, chunk);
+                AddMissing(missing, static_cast<uint32_t>(phys), static_cast<uint32_t>(phys + chunk));
             }
+            done += chunk;
         }
         return;
     }

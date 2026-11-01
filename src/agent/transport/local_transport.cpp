@@ -506,6 +506,11 @@ private:
                     continue;
                 return;
             }
+#ifdef SO_NOSIGPIPE
+            // macOS has no MSG_NOSIGNAL: a client that disconnects mid-reply must not kill the emulator.
+            const int on = 1;
+            setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+#endif
             impl->client_fds.push_back(fd);
             impl->client_workers.push_back(std::thread(&UnixSocketTransport::ServeClientThread, this, fd));
         }

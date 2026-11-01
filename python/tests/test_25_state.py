@@ -239,7 +239,7 @@ class StateAfterBootTest(unittest.TestCase):
         box = Dosbox.start(mounts=[Mount("C", str(tmp))], autoexec=[], headless=True, conf=US)
         try:
             wait_prompt(box)
-            box.type_text("BOOT C:\BOOT.IMG\n", layout="us")
+            box.type_text("BOOT C:\\BOOT.IMG\n", layout="us")
 
             def booted():
                 regs = box.registers()

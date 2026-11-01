@@ -248,7 +248,7 @@ void IntsOnSoftwareInterrupt(uint8_t num, uint32_t oldeip)
     CheckGeneration();
     const bool pm = InPm();
     if (!pm && SegValue(cs) == CB_SEG)
-        return; // DOSBox-internal call from a callback stub (spec 5.7: only the triggering INT counts)
+        return; // DOSBox-internal call from a callback stub (only the triggering INT counts)
     if (!IntWanted(num, reg_ax, pm))
         return;
     JsonValue event = JsonValue::Object();

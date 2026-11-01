@@ -1,0 +1,87 @@
+# dosbox-lab: build with the control extension and run the Python test suite.
+name: dosbox-lab
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: dosbox-lab-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (offline tests, lint)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y nasm
+          pip install -e ./python ruff
+      - name: Lint
+        working-directory: python
+        run: ruff check .
+      - name: Offline tests (no emulator build)
+        working-directory: python
+        run: python -m unittest -v tests.test_37_offline tests.test_32_instance tests.test_19_snapshot
+
+  linux:
+    name: Linux build and end-to-end tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential autoconf automake nasm xvfb \
+            libsdl2-dev libsdl2-net-dev libncurses-dev libpng-dev zlib1g-dev \
+            libxkbfile-dev libasound2-dev libfreetype-dev
+      - name: Build
+        run: ./build-lab
+      - name: Install the Python package
+        run: pip install -e ./python
+      - name: End-to-end tests
+        working-directory: python
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" python -m unittest discover -s tests -t .
+      - name: Upload run folders on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runs-linux
+          path: .runs/
+          retention-days: 7
+
+  windows:
+    name: Windows build
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build (VS 2022 toolset)
+        shell: pwsh
+        run: .\build.ps1 -Toolset v143
+      - name: Install the Python package
+        run: pip install -e ./python
+      - name: Offline tests
+        working-directory: python
+        run: python -m unittest -v tests.test_37_offline
+      - name: Smoke test (headless instance)
+        working-directory: python
+        run: python -m unittest -v tests.test_01_ping tests.test_29_run_batch

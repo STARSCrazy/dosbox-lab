@@ -10,7 +10,7 @@
 
 namespace dmcp {
 
-// Origin of a va mapping; the lower value wins (spec rule 3).
+// Origin of a va mapping; the lower value wins (symbol file segments over symbol file base over set over derived).
 enum class Origin : int { SymbolsSegments = 1, SymbolsBase = 2, Set = 3, Derived = 4 };
 
 struct ModuleSegment {

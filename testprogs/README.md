@@ -1,7 +1,7 @@
 # Test programs
 
 Small DOS programs with exactly known behavior for the end-to-end tests in `python/tests/`.
-Build: `.\build.ps1` (needs NASM in PATH or in the environment variable `NASM`). The `.COM` and `.EXE` files are checked in.
+Build: `.\build.ps1` on Windows or `./build.sh` on Linux/macOS (needs NASM in PATH or in the environment variable `NASM`). The `.COM` and `.EXE` files are checked in; `python/tests/test_37_offline.py` checks that they match the sources.
 The default output is a `.COM` file; a source with the line `; OUTPUT=EXE` becomes `<NAME>.EXE` (the source builds the MZ header itself).
 The fixed addresses and contents are described in the header comment of each `.asm` file.
 
@@ -17,3 +17,14 @@ The fixed addresses and contents are described in the header comment of each `.a
 - `FUNCPM.COM`: stack switch for `func_run`: like `CALLS32.COM` in 32-bit PM, then IRETD to ring 3; `ring3fn` (`PSP:02C0`) calls INT 30h, the ring 0 handler runs on the TSS stack (ESP0 `0x00070000`) and writes `0x11223344` to linear `0x00500010`; then `R3OK` to linear `0x00500000`.
 - `FILEIO.COM`: known file accesses for the `file` event: waits for `PSP:03F1` != 0, creates `FIO.DAT` (64 bytes 00..3F), reads 16 bytes from position 10h via `read` (`PSP:0280`) into `PSP:0400` and 8 bytes into `PSP:0410`, writes `FIO` to CON (no `file` event) and sets `PSP:03F0` = 1. In the test, start it with a temporary directory as drive C.
 - `SCENE.COM`: test program for scenarios: prints `READY`, waits for a key, stores the char at `PSP:0300`, prints `KEY <char>`, calls `done_fn` (`PSP:0200`, sets `PSP:0301` = 5Ah, prints `DONE`), then an HLT loop.
+- `MEMTEST.COM`: known memory content: the marker `DMCP-MEMTEST-MARK`, followed by a counting dword, a mirror dword that continuously receives the input dword, and the input dword.
+- `DEBUG.COM`: a known loop for breakpoints, stepping and `run_until` (`call` at `PSP:0107`, counter at `PSP:0180`); offsets in the header of `debug.asm`.
+- `FLOW.COM`: known indirect jumps and calls for coverage and control-flow recording (`call [bx]`, `call ax`, `jmp [mem]`, far call, INT); offsets in the header of `flow.asm`.
+- `CALLS.COM`: known call patterns for the call log (nested, recursive, far, `ret 4`, called 5 times, stack escapes); waits for `PSP:03F1` != 0.
+- `FUNC.COM`: functions for `func_run` (`sum` at `PSP:0200`, `calls` at `PSP:0220`, `with_int` at `PSP:0240`); waits for `PSP:03F1` != 0, then calls each once and halts.
+- `PMODE.COM`: switches to 32-bit protected mode with paging (identity 0..4 MB, linear `0x01000000` -> physical `0x00200000`) and stays there; `DMCP` and a counter at linear `0x01000000`.
+- `INT21.COM`: events test: own INT 31h handler, INT 21h open/close of itself, shrinks its block and starts `EXITCODE.COM ARG1`.
+- `EXITCODE.COM`: one line on stdout, one on stderr (handle 2), errorlevel 2Ah.
+- `KEYS.COM`: stores AX of each INT 16h key read at `0000:04F0` and counts keys at `0000:04F2`.
+- `MOUSE.COM`: mode 13h; writes the INT 33h state continuously to `0000:04F4..04FD` (x, y, buttons, mickey sums).
+- `VIDEO.COM`: mode 13h, palette 1/2/3 = red/green/blue, three vertical stripes (screenshot test).

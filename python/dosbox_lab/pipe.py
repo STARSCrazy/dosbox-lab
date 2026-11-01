@@ -118,4 +118,4 @@ class PipeClient:
                 raise DmcpError("instance_dead", "the emulator closed the connection")
             self._buffer += chunk
         line, self._buffer = self._buffer.split(b"\n", 1)
-        return line.decode("utf-8")
+        return line  # bytes: json.loads decodes UTF-8 and reports bad bytes as ValueError

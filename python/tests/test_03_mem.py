@@ -81,7 +81,7 @@ class MemTest(unittest.TestCase):
             self.assertEqual(ctx.exception.code, "bad_address", addr)
 
     def test_search_ignores_missing_pages(self):
-        # The range extends past the end of RAM (01000000): missing bytes read as 0 but must not match (B3).
+        # The range extends past the end of RAM (01000000): missing bytes read as 0 but must not match.
         res = self.box.call("mem.search", address="l:00FF0000", length=0x20000, hex="00000000", max_hits=1000000)
         for hit in res["hits"]:
             self.assertLessEqual(int(hit["linear"], 16), 0x01000000 - 4, hit)

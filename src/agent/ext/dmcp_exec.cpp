@@ -59,8 +59,8 @@ uint8_t g_stop_int = 0;
 uint16_t g_stop_ax = 0;
 // Skip flag for the instruction we resume at: no checks there (breakpoints, stop condition). emu.continue sets it
 // only after a stop decided at this very instruction (it must not hit twice; after a watch/pause/frame/step stop
-// the instruction is checked once). run_until/step_over/frame_step from a paused state always set it (E4: at
-// least one instruction).
+// the instruction is checked once). run_until/step_over/frame_step from a paused state always set it (they
+// run at least one instruction).
 bool g_skip_break_once = false;
 uint32_t g_skip_linear = 0; // the instruction the skip flag applies to (an IRQ handler may run first)
 // True while StepOne runs. A callback (DOS/BIOS service) may re-enter DOSBOX_RunMachine via
@@ -218,7 +218,7 @@ bool OptionalByte(const JsonValue& params, const char* name, int* out, Error* er
 bool IntAt(uint32_t linear, uint8_t* vector)
 {
     if ((!cpu.pmode || GETFLAG(VM)) && SegValue(cs) == CB_SEG)
-        return false; // internal INT stubs of the emulator's own BIOS/DOS (as the int log, stage-2 E6)
+        return false; // internal INT stubs of the emulator's own BIOS/DOS (as the int log)
     uint8_t b = 0;
     uint32_t i = 0;
     for (; i < 15; ++i) {
@@ -278,7 +278,7 @@ bool StopDecidedHere(const std::string& reason)
            reason == "pmode";
 }
 
-// Resume after arming a stop condition: nothing is checked at the current instruction (E4).
+// Resume after arming a stop condition: nothing is checked at the current instruction.
 void ResumeArmed()
 {
     const bool was_paused = g_paused;
@@ -299,7 +299,7 @@ void StopAt(const std::string& reason)
 {
     g_paused = true;
     g_stop_reason = reason;
-    g_skip_break_once = false; // a stop never leaves the skip flag behind (stage-2 parked point)
+    g_skip_break_once = false; // a stop never leaves the skip flag behind
     FuncOnStop();              // a running func measures its result at any stop
 }
 

@@ -23,12 +23,15 @@ Typical uses: reverse engineering and decompiling DOS games and programs, record
 
 ## Requirements
 
-- Windows x64. The extension is built with Visual Studio only so far; the other DOSBox-X build paths (Linux, macOS, MinGW) have not been tried with it.
-- Microsoft Visual C++ (MSBuild), from Visual Studio 2019 or 2022 – the free Community edition or the Build Tools are enough, with the "Desktop development with C++" workload. The project uses the VS 2019 toolset (v142) by default, as DOSBox-X does. With VS 2022 either add the "MSVC v142" component in the installer or build with `-Toolset v143` (not tested yet).
+- Windows x64 or Linux x86-64. macOS should work through the Linux build path (autotools, Unix socket) but has not been tried yet; MinGW is not supported.
+- Windows: Microsoft Visual C++ (MSBuild), from Visual Studio 2019 or 2022 – the free Community edition or the Build Tools are enough, with the "Desktop development with C++" workload. The project uses the VS 2019 toolset (v142) by default, as DOSBox-X does. With VS 2022 either add the "MSVC v142" component in the installer or build with `-Toolset v143` (not tested yet).
+- Linux: a C++ compiler, GNU autotools and the development packages for SDL2 and ncurses (for the built-in debugger). On Debian/Ubuntu: `sudo apt install build-essential autoconf automake libsdl2-dev libsdl2-net-dev libncurses-dev libpng-dev zlib1g-dev libxkbfile-dev libasound2-dev libfreetype-dev`.
 - Python 3.10 or newer
 - Optional: [NASM](https://www.nasm.us/) (the Netwide Assembler, a free x86 assembler), only to rebuild the small DOS test programs in `testprogs/`. The built programs are already included.
 
 ## Build
+
+Windows:
 
 ```powershell
 .\build.ps1          # Release SDL2 | x64 -> bin\x64\Release SDL2\dosbox-lab.exe
@@ -36,17 +39,27 @@ Typical uses: reverse engineering and decompiling DOS games and programs, record
 .\build.ps1 -Toolset v143   # use the VS 2022 toolset instead of v142
 ```
 
-`build.ps1` finds MSBuild through the `MSBUILD` environment variable, `vswhere` or `PATH`, and enables the extension with `/DC_DOSBOX_AGENT=1 /DC_DMCP=1`. The test programs in `testprogs/` are already checked in; to rebuild them run `testprogs\build.ps1` (NASM from the `NASM` environment variable or from `PATH`).
+`build.ps1` finds MSBuild through the `MSBUILD` environment variable, `vswhere` or `PATH`, and enables the extension with `/DC_DOSBOX_AGENT=1 /DC_DMCP=1`.
+
+Linux:
+
+```bash
+./build-lab            # autogen + configure --enable-debug --enable-dmcp --enable-sdl2 + make -> src/dosbox-x
+./build-lab --clean    # full rebuild
+./build-lab -- --disable-x11   # extra ./configure options
+```
+
+The test programs in `testprogs/` are already checked in; to rebuild them run `testprogs\build.ps1` or `testprogs/build.sh` (NASM from the `NASM` environment variable or from `PATH`).
 
 ## Install the Python package
 
-```powershell
+```bash
 pip install -e ./python
 ```
 
 This provides the commands `dosbox-lab` (command line) and `dosbox-lab-mcp` (MCP server over stdio), and `python -m dosbox_lab`.
 
-The emulator is looked up in `bin\x64\Release SDL2\dosbox-lab.exe` inside this checkout, which is why the editable install (`-e`) is recommended. To use another file, set `DOSBOX_LAB_EXE`. Run folders (logs, screenshots, recordings) go to `.runs/` in the checkout; override with `DOSBOX_LAB_RUNS`.
+The emulator is looked up in `bin\x64\Release SDL2\dosbox-lab.exe` (Windows) or `src/dosbox-x` (Linux) inside this checkout, which is why the editable install (`-e`) is recommended. To use another file, set `DOSBOX_LAB_EXE`. Run folders (logs, screenshots, recordings) go to `.runs/` in the checkout; override with `DOSBOX_LAB_RUNS`.
 
 ## Use with an MCP client
 
@@ -62,7 +75,7 @@ A configuration example for other clients is in [python/mcp.example.json](python
 dosbox-lab start --dir C:\games\demo --cmd GAME.EXE --headless
 dosbox-lab pause
 dosbox-lab regs
-dosbox-lab read 0043:000406F1 16
+dosbox-lab read 0043:000406F1 10   # lengths are hex: 16 bytes
 dosbox-lab shot
 dosbox-lab stop
 
@@ -96,11 +109,18 @@ cd python
 python -m unittest discover -s tests -t .
 ```
 
-The tests start real emulator instances (build first). One test checks that the host mouse cursor is never moved, so do not move the mouse while the tests run.
+The tests start real emulator instances (build first); `tests/test_37_offline.py` runs without an emulator. One test checks that the host mouse cursor is never moved, so do not move the mouse while the tests run. On Linux without a desktop, run the suite under a virtual X server:
+
+```bash
+cd python
+xvfb-run -a python -m unittest discover -s tests -t .
+```
+
+`dosbox-lab clean` removes the run folders (`.runs/<id>`) of instances that are no longer running.
 
 ## Status
 
-Version 0.1.0. Windows only. The interface was renamed from an earlier internal version; old names are listed in [docs/dosbox-lab/MIGRATION.md](docs/dosbox-lab/MIGRATION.md), and old scenario and symbol files are still read.
+Version 0.1.0. Windows and Linux. The interface was renamed from an earlier internal version; old names are listed in [docs/dosbox-lab/MIGRATION.md](docs/dosbox-lab/MIGRATION.md), and old scenario and symbol files are still read.
 
 ## Relationship to DOSBox-X
 
