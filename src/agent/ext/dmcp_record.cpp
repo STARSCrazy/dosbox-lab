@@ -12,7 +12,7 @@
 
 namespace dmcp {
 
-// Per-instruction and per-interrupt dispatcher of the stage-2 recordings. The recording tasks
+// Per-instruction and per-interrupt dispatcher of the recordings. The recording tasks
 // (events, ints, mode, coverage, flow) add their calls here.
 bool RecordingNeedsHook()
 {

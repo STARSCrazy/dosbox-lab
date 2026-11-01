@@ -12,6 +12,7 @@
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
+#include <cctype>
 #include <cstring>
 #include <fstream>
 #include <map>
@@ -67,12 +68,20 @@ struct PendingCall {
     Error error;
 };
 
+// Methods that may run while emu.step/step_over executes a callback that waits inside the emulation loop
+// (e.g. INT 16h waiting for a key re-enters the loop, and the queue is pumped there): input is what ends the
+// wait; reading the screen and the status has no effect on the interrupted instruction.
+bool AllowedDuringStep(const std::string& method)
+{
+    return method.compare(0, 6, "input.") == 0 || method.compare(0, 7, "screen.") == 0 || method == "emu.status";
+}
+
 bool RunOnEmulationThread(const Handler& handler, const JsonValue& params, uint32_t timeout_ms,
-                          JsonValue* result, Error* error)
+                          bool allowed_during_step, JsonValue* result, Error* error)
 {
     std::shared_ptr<PendingCall> call = std::make_shared<PendingCall>();
     const std::uint64_t ticket = dosbox_agent::AGENT_EmulationQueue().Submit(
-            [call, handler, params](std::uint64_t) {
+            [call, handler, params, allowed_during_step](std::uint64_t) {
                 {
                     std::lock_guard<std::mutex> lock(call->mutex);
                     if (call->abandoned)
@@ -83,7 +92,13 @@ bool RunOnEmulationThread(const Handler& handler, const JsonValue& params, uint3
                 Error local_error;
                 bool ok = false;
                 try {
-                    ok = handler(params, &local_result, &local_error);
+                    if (InStep() && !allowed_during_step)
+                        // Nested inside a step: a state.load, func.start or second step here would replace the
+                        // machine state under the half-executed instruction.
+                        ok = Fail(&local_error, "busy", "a step is still executing (a BIOS/DOS call waits, e.g. "
+                                  "INT 16h for a key: send input.* to let it finish)");
+                    else
+                        ok = handler(params, &local_result, &local_error);
                 } catch (...) {
                     ok = Fail(&local_error, "internal", "exception in emulation-thread handler");
                 }
@@ -242,21 +257,45 @@ bool Fail(Error* error, const std::string& code, const std::string& message)
     return false;
 }
 
+bool PlainName(const std::string& name)
+{
+    if (name.empty() || name.find_first_of("\\/:*?\"<>|") != std::string::npos || name.find("..") != std::string::npos)
+        return false;
+    if (name.back() == '.' || name.back() == ' ')
+        return false;
+    // Windows device names (also with an extension) would write to the device instead of a file.
+    std::string stem = name.substr(0, name.find('.'));
+    while (!stem.empty() && stem.back() == ' ')
+        stem.pop_back();
+    for (char& c : stem)
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL")
+        return false;
+    if (stem.size() == 4 && (stem.compare(0, 3, "COM") == 0 || stem.compare(0, 3, "LPT") == 0) && stem[3] >= '0' && stem[3] <= '9')
+        return false;
+    return true;
+}
+
 std::string OutputPath(const std::string& file_name)
 {
     const char* dir = std::getenv("DMCP_OUTDIR");
     if (dir == nullptr || dir[0] == '\0')
         return file_name;
     std::string path(dir);
+#ifdef WIN32
+    const char separator = '\\';
+#else
+    const char separator = '/';
+#endif
     if (path.back() != '\\' && path.back() != '/')
-        path.push_back('\\');
+        path.push_back(separator);
     return path + file_name;
 }
 
 bool WriteOutputFile(const std::string& file_name, const void* data, size_t size,
                      std::string* full_path, Error* error)
 {
-    if (file_name.empty() || file_name.find_first_of("\\/:*?\"<>|") != std::string::npos)
+    if (!PlainName(file_name))
         return Fail(error, "bad_argument", "file name must be a plain name without path characters: " + file_name);
     const std::string path = OutputPath(file_name);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
@@ -328,8 +367,8 @@ bool DMCP_HandleRequest(const std::string& request, std::string* response)
     dmcp::Error error;
     bool ok;
     if (found->second.on_emulation_thread)
-        ok = dmcp::RunOnEmulationThread(found->second.handler, parsed.params,
-                                        static_cast<uint32_t>(timeout_ms), &result, &error);
+        ok = dmcp::RunOnEmulationThread(found->second.handler, parsed.params, static_cast<uint32_t>(timeout_ms),
+                                        dmcp::AllowedDuringStep(parsed.method), &result, &error);
     else
         ok = found->second.handler(parsed.params, &result, &error);
 

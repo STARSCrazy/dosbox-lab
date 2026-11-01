@@ -46,7 +46,7 @@ struct Config {
     int stack_bytes = -1; // -1 = 32 (16-bit target) / 64 (32-bit target)
     uint64_t max_per_target = 1000;
     uint64_t max_bytes = 256ull << 20;
-    uint64_t states = 0;      // D31: savestate at the entry of the first N recorded calls per target
+    uint64_t states = 0;      // savestate at the entry of the first N recorded calls per target
     uint64_t max_states = 1000;
 };
 
@@ -87,11 +87,6 @@ std::map<uint32_t, uint64_t> g_per_target;          // recorded entries per targ
 std::map<uint32_t, std::pair<CodePoint, uint64_t>> g_omitted; // target linear -> (point, count)
 uint64_t g_states_written = 0;
 uint64_t g_states_dropped = 0; // over max_states
-
-bool PlainName(const std::string& name)
-{
-    return !name.empty() && name.find_first_of("\\/:*?\"<>|") == std::string::npos;
-}
 
 bool LinearOf(const std::string& text, Address* out, Error* error)
 {
@@ -479,7 +474,7 @@ void ReturnPoint(const Transfer& t, uint16_t* sel, uint32_t* off, uint16_t* fram
     *sp_after = t.sp_before;
 }
 
-// D31: savestate at the first instruction of the target (before it executes); the sidecar names the return.
+// Savestate at the first instruction of the target (before it executes); the sidecar names the return.
 void SaveEntryState(Frame& f, const Transfer& t, int bits)
 {
     if (g_states_written >= g_cfg.max_states) {
@@ -665,6 +660,7 @@ void CallsOnExit(uint16_t psp)
     DropContextsFrom(1);
     if (!g_active)
         return;
+    QuietMem quiet;
     const uint32_t paragraphs = real_readw(static_cast<uint16_t>(psp - 1), 3); // MCB size
     Context& c = g_contexts.front();
     for (size_t i = 0; i < c.frames.size(); ++i) {
@@ -719,6 +715,8 @@ uint64_t CallsCurrentId()
 void RegisterCalls()
 {
     Register("calls.start", [](const JsonValue& params, JsonValue* result, Error* error) {
+        if (!RequireHookCore("calls.start", error))
+            return false;
         Config cfg;
         if (!ParseConfig(params, &cfg, error))
             return false;

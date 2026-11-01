@@ -51,6 +51,8 @@ struct PageState {
     HostPt write_host = nullptr;
 };
 std::map<uint32_t, PageState> g_pages; // linear page number -> state
+// The same entries as a flat list for the per-instruction re-install (map nodes are stable; rebuilt with g_pages).
+std::vector<std::pair<uint32_t, PageState*>> g_page_list;
 
 struct Access {
     uint64_t nr = 0;
@@ -266,7 +268,7 @@ void WatchHandler::Seen(bool write, PhysPt addr, uint8_t width, uint32_t value, 
         Install(page, found->second);
     if (QuietDepth() > 0)
         return; // the agent's own reads (disassembler)
-    // Instruction fetch is no data read (E9).
+    // Instruction fetch is no data read.
     if (!write && g_have_insn && linear - g_insn.linear < 16)
         return;
     for (Watch& w : g_watches) {
@@ -339,6 +341,7 @@ void Rebuild()
             PAGING_UnlinkPages(page, 1); // init handler: the next access left the page again
     }
     g_pages.clear();
+    g_page_list.clear();
     for (const Watch& w : g_watches) {
         const uint32_t first = w.start >> 12;
         const uint32_t last = static_cast<uint32_t>((static_cast<uint64_t>(w.start) + w.length - 1) >> 12);
@@ -348,8 +351,10 @@ void Rebuild()
             st.want_write = st.want_write || w.write;
         }
     }
-    for (auto& item : g_pages)
+    for (auto& item : g_pages) {
+        g_page_list.push_back(std::make_pair(item.first, &item.second));
         Install(item.first, item.second);
+    }
     UpdateHookActive();
 }
 
@@ -401,8 +406,9 @@ void WatchOnInstruction()
 {
     g_insn = CurrentCodePoint();
     g_have_insn = true;
-    for (auto& item : g_pages)
-        Install(item.first, item.second);
+    // The guest's last instruction may have flushed the TLB (CR3 load, INVLPG, A20): redirect again.
+    for (const auto& item : g_page_list)
+        Install(item.first, *item.second);
 }
 
 bool WatchTakeStop()
@@ -422,6 +428,8 @@ JsonValue WatchStopJson() { return AccessJson(g_stop_access, false); }
 void RegisterWatch()
 {
     Register("watch.add", [](const JsonValue& params, JsonValue* result, Error* error) {
+        if (!RequireHookCore("watch.add", error))
+            return false;
         Watch w;
         std::string text;
         if (!ParamStr(params, "address", &text))

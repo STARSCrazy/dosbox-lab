@@ -93,7 +93,7 @@ if __name__ == "__main__":
 
 
 class SnapshotUnitTest(unittest.TestCase):
-    """Without an emulator: range pieces (B7) and numbering (B13)."""
+    """Without an emulator: range pieces and numbering."""
 
     def test_overlapping_big_segments_split_into_64mb_pieces(self):
         from dosbox_lab.snapshot import MAX_RANGE, _pieces

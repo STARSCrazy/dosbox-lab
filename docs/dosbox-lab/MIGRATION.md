@@ -246,7 +246,7 @@ Format `dosbox-lab-scenario/1`. Old files load unchanged (section 2); new files 
 | `warte_bilder`, `warte_bild`, `warte_s` | `wait_frames`, `wait_frame`, `wait_s` |
 | `zustand_laden`, `speicherstand` | `state_load`, `state_save` |
 | `aufzeichnung_start`, `aufzeichnung_stop` | `recording_start`, `recording_stop` |
-| step values: `knopf`, `x_adresse`, `y_adresse`, `breite`, `toleranz`, `versuche`, `zeile`, `adresse`, `maske`, `danach`, `art` | `button`, `x_address`, `y_address`, `width`, `tolerance`, `attempts`, `line`, `address`, `mask`, `then`, `kind` |
+| step values: `knopf`, `x_adresse`, `y_adresse`, `breite`, `toleranz`, `versuche`, `warte_s`, `zeile`, `adresse`, `maske`, `danach`, `art` | `button`, `x_address`, `y_address`, `width`, `tolerance`, `attempts`, `wait_s`, `line`, `address`, `mask`, `then`, `kind` |
 | values `links`, `rechts`, `mitte` | `left`, `right`, `middle` |
 | `danach: anhalten/weiter` | `then: halt/continue` |
 | recording options `ziele`, `bereiche` (`von`/`bis`), `module`, `max_je_ziel`, `zustaende`, `max_zustaende`, `typen`, `int_modus`, `mit_rueckgabe`, `datei_vorschau`, `max_bloecke`, `fortsetzen`, `indirekt`, `ring_groesse`, `mit_returns`, `max_paare` | `targets`, `ranges` (`from`/`to`), `modules`, `max_per_target`, `states`, `max_states`, `types`, `int_mode`, `with_return`, `file_preview`, `max_blocks`, `resume`, `indirect`, `ring_size`, `with_returns`, `max_pairs` |

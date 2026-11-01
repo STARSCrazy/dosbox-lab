@@ -16,7 +16,7 @@ using dosbox_agent::JsonType;
 using dosbox_agent::JsonValue;
 
 struct Error {
-    std::string code;     // see Global Constraints of the stage-1 plan
+    std::string code;     // machine-readable, e.g. "bad_argument", "bad_address", "not_ready"
     std::string message;
 };
 
@@ -46,6 +46,8 @@ bool ParamBool(const JsonValue& params, const std::string& name, bool* out);
 // Fills *error and returns false, so handlers can write `return Fail(...)`.
 bool Fail(Error* error, const std::string& code, const std::string& message);
 
+// A plain output file name: no path characters, no "..", no trailing dot/space, no Windows device name (CON ...).
+bool PlainName(const std::string& name);
 // Output files go to %DMCP_OUTDIR% (set by the Python layer), else the current directory.
 std::string OutputPath(const std::string& file_name);
 bool WriteOutputFile(const std::string& file_name, const void* data, size_t size,
@@ -62,7 +64,7 @@ void RegisterEvents();
 void RegisterCoverage();
 void RegisterFlow();
 void RegisterCalls();
-// dmcp_func.cpp (D31): run one recorded call again.
+// dmcp_func.cpp: run one recorded call again.
 void RegisterFunc();
 // dmcp_exec.cpp: stop_reason of the current pause ("none" while running).
 const std::string& StopReason();
@@ -76,6 +78,10 @@ void InputTick();
 bool InputOwned();
 void RegisterScreen();
 
+// dmcp_exec.cpp: true if the CPU core that runs now calls the instruction hook (only the normal core does;
+// dynamic, simple, full, prefetch and 286/8086 cores do not). RequireHookCore fails with unsupported_core.
+bool HookCoreActive();
+bool RequireHookCore(const char* what, Error* error);
 // dmcp_exec.cpp: recompute DMCP_hook_active after any change of breakpoints, pause conditions or recordings.
 void UpdateHookActive();
 // dmcp_exec.cpp: pause with the given stop_reason (clears the skip flag); resume like emu.continue.
@@ -93,6 +99,9 @@ bool RecordingNeedsHook();
 // dmcp_record.cpp: called for every instruction that executes now (not for one the agent stops before).
 void RecordInstruction();
 
+// dmcp_modules.cpp: command tail of a PSP (printable ASCII, others as '?'), read without triggering watches.
+std::string CommandTailOf(uint16_t psp);
+
 // While > 0, memory accesses made by the agent itself (disassembler) do not trigger watches (dmcp_watch.cpp).
 int& QuietDepth();
 struct QuietMem {
@@ -109,13 +118,16 @@ void RegisterDos();
 void RegisterBatch();
 void BatchOnExec(const std::string& path, bool load_and_run);
 
-// dmcp_le.cpp (D27): derive the linear placement of LE objects from DPMI 0501h allocations.
+// dmcp_le.cpp: derive the linear placement of LE objects from DPMI 0501h allocations.
 bool LeActive(); // a derivation is open: the instruction hook must stay on
 void LeOnExec(const char* raw_name, const std::string& module_name, uint16_t flags);
 // Observation: INT 31h AX=0501h entry (hook), its return (instruction hook), end of the program.
 void LeOnSoftwareInterrupt(uint8_t num, uint32_t oldeip);
 void LeOnInstruction();
 void LeOnExit(uint16_t psp);
+void LeOnStateLoad();
+// dmcp_input.cpp: after state.load (before_ms = PIC_FullIndex() before loading).
+void InputOnStateLoad(double before_ms);
 // DMCP_OnExit: a program ended during the capture (errorlevel for batch.json / batch.status last_exit_code).
 void BatchOnExit(uint16_t psp, uint8_t exit_code);
 

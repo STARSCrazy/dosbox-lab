@@ -38,7 +38,11 @@ uint64_t GuestRamBytes();
 bool PhysInRam(uint32_t phys, size_t len);
 // Walks the guest page tables (no TLB). Fails with page_not_present if unmapped or if a page
 // directory/table lies outside guest RAM. Does not check that the resulting page is inside RAM.
+// Without paging, pages below LINK_START follow DOSBox's first-MB remapping (EMS page frame).
 bool LinearToPhys(uint32_t linear, uint32_t* phys, Error* error);
+// Host pointer to a physical byte if its page is plain memory (RAM, ROM, linear frame buffer), else nullptr:
+// pages behind device handlers (VGA A0000-BFFFF window, unmapped space) cannot be read without side effects.
+uint8_t* PhysHostPtr(uint32_t phys, bool write);
 // Fills has_phys/phys if the linear address is mapped; never fails.
 void ResolvePhys(Address* address);
 
@@ -46,11 +50,11 @@ void ResolvePhys(Address* address);
 // false if unmapped or outside guest RAM. Never raises guest faults and never triggers watches.
 bool PeekLinear(uint32_t linear, uint8_t* out);
 JsonValue AddressJson(const Address& address, bool file_format = false);
-// Reads len bytes starting at the address. Unmapped pages and bytes outside guest RAM read as 0 and are
-// listed in *missing (linear ranges for linear/segmented addresses, physical ranges for p:).
+// Reads len bytes starting at the address. Unmapped pages, bytes outside guest RAM and device pages (VGA
+// window) read as 0 and are listed in *missing (linear ranges for linear/segmented addresses, physical ranges for p:).
 void ReadAddress(const Address& address, uint8_t* out, size_t len, RangeList* missing);
 // Writes; fails (nothing written) with page_not_present if any page is unmapped, or with bad_address if
-// any target byte lies outside guest RAM.
+// any target byte is not plain memory (outside guest RAM, device page).
 bool WriteAddress(const Address& address, const uint8_t* data, size_t len, Error* error);
 // Reads a GDT/LDT descriptor without guest faults.
 bool LoadDescriptor(uint16_t selector, Descriptor* desc, Error* error);

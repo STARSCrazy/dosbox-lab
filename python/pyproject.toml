@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]  # SPDX string in project.license
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "dosbox-lab"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Control and analysis of a DOSBox-X fork for DOS programs: MCP server, Python API and CLI"
 requires-python = ">=3.10"
 license = "GPL-2.0-or-later"
@@ -16,3 +16,15 @@ dosbox-lab-mcp = "dosbox_lab.mcp_server:main"
 
 [tool.setuptools]
 packages = ["dosbox_lab"]
+
+[tool.setuptools.dynamic]
+version = {attr = "dosbox_lab.__version__"}
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+# Errors and warnings only; the compact one-statement-per-line style of cli.py is intended.
+select = ["E", "F", "W"]
+ignore = ["E501", "E701", "E702", "E741"]

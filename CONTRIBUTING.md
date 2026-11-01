@@ -10,7 +10,8 @@ Thanks for your interest. dosbox-lab is a fork of [DOSBox-X](https://github.com/
 ## Guidelines
 
 - Keep changes to DOSBox-X files as small as possible and mark each hook with `// DOSBOX-LAB hook`, so upstream merges stay easy.
-- Add or update a test in `python/tests/` for new behaviour. Tests start real emulator instances; see the README for how to build and run them.
+- Add or update a test in `python/tests/` for new behaviour. Tests start real emulator instances; see the README for how to build (`build.ps1` on Windows, `./build-lab` on Linux) and run them. Logic that needs no emulator belongs in `test_37_offline.py`, which also runs in CI without a build.
+- New code must build on Windows (MSBuild) and Linux (autotools): add new source files to `vs/dosbox-x.vcxproj` and `src/agent/Makefile.am`.
 - Code, comments, tool names and documentation are in English.
 - New source files carry `SPDX-License-Identifier: GPL-2.0-or-later` in their first comment line. By contributing you agree that your work is licensed under the GPL, version 2 or later.
 

@@ -1,15 +1,46 @@
 import ctypes
+import ctypes.util
+import os
 import time
 import unittest
-from ctypes import wintypes
 
 from tests.util import class_box, need_build, start_prog, wait_until
 
 
+def _x11_cursor():
+    """Pointer position on the X display (Linux), or None without X11."""
+    lib = ctypes.util.find_library("X11")
+    if not lib or not os.environ.get("DISPLAY"):
+        return None
+    x11 = ctypes.CDLL(lib)
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XDefaultRootWindow.restype = ctypes.c_ulong
+    x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    display = x11.XOpenDisplay(None)
+    if not display:
+        return None
+    try:
+        root, child = ctypes.c_ulong(), ctypes.c_ulong()
+        rx, ry, wx, wy = ctypes.c_int(), ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
+        mask = ctypes.c_uint()
+        x11.XQueryPointer(ctypes.c_void_p(display), ctypes.c_ulong(x11.XDefaultRootWindow(display)),
+                          ctypes.byref(root), ctypes.byref(child), ctypes.byref(rx), ctypes.byref(ry),
+                          ctypes.byref(wx), ctypes.byref(wy), ctypes.byref(mask))
+        return rx.value, ry.value
+    finally:
+        x11.XCloseDisplay(display)
+
+
 def cursor_and_foreground():
-    point = wintypes.POINT()
-    ctypes.windll.user32.GetCursorPos(ctypes.byref(point))
-    return (point.x, point.y), ctypes.windll.user32.GetForegroundWindow()
+    """Host cursor position and foreground window (Windows); on X11 only the cursor; None if unknown."""
+    if os.name == "nt":
+        from ctypes import wintypes
+        point = wintypes.POINT()
+        ctypes.windll.user32.GetCursorPos(ctypes.byref(point))
+        return (point.x, point.y), ctypes.windll.user32.GetForegroundWindow()
+    cursor = _x11_cursor()
+    return None if cursor is None else (cursor, None)
 
 
 def mouse_block(box):
@@ -19,6 +50,8 @@ def mouse_block(box):
 
 
 @need_build
+@unittest.skipUnless(os.name == "nt" or os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"),
+                     "needs a visible window: run under a desktop or xvfb-run")
 class MouseTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -69,6 +102,8 @@ class MouseTest(unittest.TestCase):
         self.box.mouse_click(300, 190, button="right")
         self.box.key("A")
         self.box.wait_input()
+        if self.before is None:
+            self.skipTest("host cursor position not available (no Windows, no X11 display)")
         self.assertEqual(cursor_and_foreground(), self.before)
 
 

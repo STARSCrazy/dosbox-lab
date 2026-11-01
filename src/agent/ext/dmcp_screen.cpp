@@ -208,6 +208,7 @@ void RegisterScreen()
     Register("screen.text", [](const JsonValue&, JsonValue* result, Error* error) {
         if (!IsTextMode())
             return Fail(error, "not_text_mode", "current video mode is not a text mode");
+        QuietMem quiet; // the agent's own reads must not show up in watches
         const uint8_t mode = real_readb(0x40, 0x49);
         const uint16_t cols = real_readw(0x40, 0x4A);
         uint16_t rows = static_cast<uint16_t>(real_readb(0x40, 0x84) + 1);

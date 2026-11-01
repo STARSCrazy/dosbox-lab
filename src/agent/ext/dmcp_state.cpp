@@ -32,25 +32,6 @@ extern bool dos_kernel_disabled; // sdlmain.cpp: true until the DOS kernel is up
 namespace dmcp {
 namespace {
 
-bool PlainName(const std::string& name)
-{
-    if (name.empty() || name.find_first_of("\\/:*?\"<>|") != std::string::npos || name.find("..") != std::string::npos)
-        return false;
-    if (name.back() == '.' || name.back() == ' ')
-        return false;
-    // Windows device names (also with an extension) would write to the device instead of a file.
-    std::string stem = name.substr(0, name.find('.'));
-    while (!stem.empty() && stem.back() == ' ')
-        stem.pop_back();
-    for (char& c : stem)
-        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-    if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL")
-        return false;
-    if (stem.size() == 4 && (stem.compare(0, 3, "COM") == 0 || stem.compare(0, 3, "LPT") == 0) && stem[3] >= '0' && stem[3] <= '9')
-        return false;
-    return true;
-}
-
 // Upstream SaveState::load/save swallow ZIP errors silently (half-restored state, truncated file), so check
 // the archive ourselves: required entries present and every entry readable with a matching CRC.
 bool VerifyStateZip(const std::string& path, std::string* why)
@@ -250,7 +231,7 @@ bool LoadStateFile(const std::string& path, bool unchecked, JsonValue* sidecar, 
 {
     *sidecar = JsonValue();
     // Loading while the DOS shell is not up crashes the emulator: during the start, and also after BOOT of a guest
-    // OS (the DOS kernel is off again then; seen in the D31 review).
+    // OS (the DOS kernel is off again then).
     if (dos_kernel_disabled || first_shell == nullptr || DOS_ShellGetPSP() == 0)
         return Fail(error, "not_ready",
                     "DOS shell is not up (emulator still starting, or a guest OS was booted); loading would crash");
@@ -289,6 +270,7 @@ bool LoadStateFile(const std::string& path, bool unchecked, JsonValue* sidecar, 
         return Fail(error, "bad_argument", "sidecar " + info_path +
                                                " missing; pass skip_check:true to load without the check");
     }
+    const double before_ms = PIC_FullIndex();
     try {
         UpstreamFileMode mode(path);
         SaveState::instance().load(0);
@@ -302,6 +284,9 @@ bool LoadStateFile(const std::string& path, bool unchecked, JsonValue* sidecar, 
     CallsOnStateLoad();
     FileIoOnStateLoad();
     FuncOnStateLoad();
+    IntsOnStateLoad();
+    LeOnStateLoad();
+    InputOnStateLoad(before_ms);
     return true;
 }
 

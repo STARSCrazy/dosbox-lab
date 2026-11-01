@@ -248,7 +248,7 @@ void IntsOnSoftwareInterrupt(uint8_t num, uint32_t oldeip)
     CheckGeneration();
     const bool pm = InPm();
     if (!pm && SegValue(cs) == CB_SEG)
-        return; // DOSBox-internal call from a callback stub (spec 5.7: only the triggering INT counts)
+        return; // DOSBox-internal call from a callback stub (only the triggering INT counts)
     if (!IntWanted(num, reg_ax, pm))
         return;
     JsonValue event = JsonValue::Object();
@@ -305,8 +305,11 @@ void IntsOnInstruction()
     }
 }
 
+void IntsOnStateLoad() { g_open.clear(); } // open INTs of the replaced state never return
+
 void IntsOnExit(uint16_t psp)
 {
+    QuietMem quiet;
     const uint32_t paragraphs = real_readw(static_cast<uint16_t>(psp - 1), 3); // MCB size
     std::vector<OpenInt> kept;
     for (const OpenInt& open : g_open)

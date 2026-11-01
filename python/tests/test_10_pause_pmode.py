@@ -2,6 +2,7 @@ import time
 import unittest
 
 from dosbox_lab import DmcpError
+from dosbox_lab.instance import TEXT_ENCODING
 from tests.util import need_build, run_typed, start_idle, wait_until
 
 
@@ -60,7 +61,7 @@ class PausePmodeTest(unittest.TestCase):
         self.assertEqual(self.box.status()["ram_bytes"], 16 * 1024 * 1024)
 
     def test_wheel_key_disabled(self):
-        conf = (self.box.inst.rundir / "dosbox.conf").read_text(encoding="mbcs")
+        conf = (self.box.inst.rundir / "dosbox.conf").read_text(encoding=TEXT_ENCODING)
         self.assertIn("mouse_wheel_key=0", conf)
 
 

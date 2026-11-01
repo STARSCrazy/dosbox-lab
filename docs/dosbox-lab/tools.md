@@ -5,6 +5,11 @@ of several running instances. Addresses can be given in several forms: `SSSS:OOO
 (real mode), `l:<hex>` (linear), `p:<hex>` (physical), `va:MODULE:<hex>` / `rel:...` (module relative) or a symbol
 name once a symbol file is loaded.
 
+Breakpoints, stepping, `emu_run_until`, watchpoints and the coverage, flow, call and function recordings need the
+normal CPU core (`[cpu] core=normal`, the default of instances started by dosbox-lab, with a 386 or newer
+`cputype` without prefetch); with another core they fail with `unsupported_core`. `emu_status` reports `hook_core`.
+Memory reads list pages that are not plain memory (the VGA window A0000-BFFFF, unmapped space) as missing.
+
 ## Instances
 - `dosbox_start` - start an emulator instance (C: mount, autoexec lines, optional CD drive, headless).
 - `dosbox_stop` - stop an instance.

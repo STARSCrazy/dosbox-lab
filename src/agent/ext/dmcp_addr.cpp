@@ -48,9 +48,9 @@ void ReadLinear(uint32_t linear, uint8_t* out, size_t len, RangeList* missing)
         const size_t chunk = in_page < len - done ? in_page : len - done;
         uint32_t phys = 0;
         Error ignored;
-        if (LinearToPhys(current, &phys, &ignored) && PhysInRam(phys, chunk)) {
-            for (size_t i = 0; i < chunk; ++i)
-                out[done + i] = phys_readb(static_cast<PhysPt>(phys + i));
+        HostPt host = nullptr;
+        if (LinearToPhys(current, &phys, &ignored) && (host = PhysHostPtr(phys, false)) != nullptr) {
+            std::memcpy(out + done, host, chunk); // chunk stays inside one page
         } else {
             std::memset(out + done, 0, chunk);
             AddMissing(missing, current, current + static_cast<uint32_t>(chunk));
@@ -71,10 +71,30 @@ bool PhysInRam(uint32_t phys, size_t len)
     return static_cast<uint64_t>(phys) + len <= GuestRamBytes();
 }
 
+uint8_t* PhysHostPtr(uint32_t phys, bool write)
+{
+    const Bitu page = phys >> 12;
+    PageHandler* handler = MEM_GetPageHandler(page);
+    if (handler == nullptr)
+        return nullptr;
+    const Bitu flags = handler->getFlags();
+    if ((flags & PFLAG_READABLE) == 0)
+        return nullptr;
+    // ROM pages are not PFLAG_WRITEABLE; the BIOS ROM inside guest RAM (F0000-FFFFF) may still be patched like RAM,
+    // the ROM aliases at the top of the address space may not.
+    if (write && (flags & PFLAG_WRITEABLE) == 0 && !((flags & PFLAG_HASROM) != 0 && PhysInRam(phys, 1)))
+        return nullptr;
+    HostPt base = (write && (flags & PFLAG_WRITEABLE) != 0) ? handler->GetHostWritePt(page)
+                                                             : handler->GetHostReadPt(page);
+    return base != nullptr ? base + (phys & 0xFFFu) : nullptr;
+}
+
 bool LinearToPhys(uint32_t linear, uint32_t* phys, Error* error)
 {
     if (!PagingOn()) {
-        *phys = linear;
+        // Below 1 MB + HMA DOSBox remaps pages without paging (EMS page frame): follow that mapping.
+        const uint32_t page = linear >> 12;
+        *phys = page < LINK_START ? ((paging.firstmb[page] << 12) | (linear & 0xFFFu)) : linear;
         return true;
     }
     const uint32_t dir = static_cast<uint32_t>(PAGING_GetDirBase()) & 0xFFFFF000u;
@@ -243,16 +263,20 @@ JsonValue AddressJson(const Address& a, bool file_format)
 
 void ReadAddress(const Address& address, uint8_t* out, size_t len, RangeList* missing)
 {
-    if (!address.has_linear) { // physical: bytes beyond guest RAM read as 0 and are listed as missing
-        const uint64_t ram = GuestRamBytes();
-        for (size_t i = 0; i < len; ++i) {
-            const uint64_t phys = static_cast<uint64_t>(address.phys) + i;
-            if (phys < ram) {
-                out[i] = phys_readb(static_cast<PhysPt>(phys));
+    if (!address.has_linear) { // physical: bytes that are not plain memory read as 0 and are listed as missing
+        size_t done = 0;
+        while (done < len) {
+            const uint64_t phys = static_cast<uint64_t>(address.phys) + done;
+            const size_t in_page = 0x1000u - static_cast<size_t>(phys & 0xFFFu);
+            const size_t chunk = in_page < len - done ? in_page : len - done;
+            HostPt host = phys <= 0xFFFFFFFFull ? PhysHostPtr(static_cast<uint32_t>(phys), false) : nullptr;
+            if (host != nullptr) {
+                std::memcpy(out + done, host, chunk);
             } else {
-                out[i] = 0;
-                AddMissing(missing, static_cast<uint32_t>(phys), static_cast<uint32_t>(phys + 1));
+                std::memset(out + done, 0, chunk);
+                AddMissing(missing, static_cast<uint32_t>(phys), static_cast<uint32_t>(phys + chunk));
             }
+            done += chunk;
         }
         return;
     }
@@ -261,22 +285,26 @@ void ReadAddress(const Address& address, uint8_t* out, size_t len, RangeList* mi
 
 bool WriteAddress(const Address& address, const uint8_t* data, size_t len, Error* error)
 {
+    std::vector<HostPt> host(len);
     if (!address.has_linear) {
-        if (!PhysInRam(address.phys, len))
-            return Fail(error, "bad_address", "physical range lies (partly) outside guest RAM");
-        for (size_t i = 0; i < len; ++i)
-            phys_writeb(static_cast<PhysPt>(address.phys + i), data[i]);
-        return true;
-    }
-    std::vector<uint32_t> phys(len);
-    for (size_t i = 0; i < len; ++i) {
-        if (!LinearToPhys(address.linear + static_cast<uint32_t>(i), &phys[i], error))
-            return false;
-        if (!PhysInRam(phys[i], 1))
-            return Fail(error, "bad_address", "target byte lies outside guest RAM");
+        for (size_t i = 0; i < len; ++i) {
+            const uint64_t phys = static_cast<uint64_t>(address.phys) + i;
+            host[i] = phys <= 0xFFFFFFFFull ? PhysHostPtr(static_cast<uint32_t>(phys), true) : nullptr;
+            if (host[i] == nullptr)
+                return Fail(error, "bad_address", "physical range lies (partly) outside guest memory");
+        }
+    } else {
+        for (size_t i = 0; i < len; ++i) {
+            uint32_t phys = 0;
+            if (!LinearToPhys(address.linear + static_cast<uint32_t>(i), &phys, error))
+                return false;
+            host[i] = PhysHostPtr(phys, true);
+            if (host[i] == nullptr)
+                return Fail(error, "bad_address", "target byte lies outside guest memory");
+        }
     }
     for (size_t i = 0; i < len; ++i)
-        phys_writeb(static_cast<PhysPt>(phys[i]), data[i]);
+        *host[i] = data[i];
     return true;
 }
 
@@ -358,9 +386,10 @@ bool PeekLinear(uint32_t linear, uint8_t* out)
     }
     uint32_t phys = 0;
     Error ignored;
-    if (!LinearToPhys(linear, &phys, &ignored) || !PhysInRam(phys, 1))
+    HostPt host = nullptr;
+    if (!LinearToPhys(linear, &phys, &ignored) || (host = PhysHostPtr(phys, false)) == nullptr)
         return false;
-    *out = phys_readb(static_cast<PhysPt>(phys));
+    *out = *host;
     return true;
 }
 

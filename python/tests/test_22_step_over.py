@@ -61,7 +61,7 @@ class StepOverTest(unittest.TestCase, DebugProg):
         self.assertLess(float(st["time_ms"]) - before, 1000.0)
 
     def test_run_until_after_step_on_breakpoint(self):
-        # E4: run_until from the halt after a step executes at least one instruction, even if a breakpoint
+        # run_until from the halt after a step executes at least one instruction, even if a breakpoint
         # sits on the current instruction.
         self.box.run_until(address=self.addr(0x10A))
         st = self.box.step()
