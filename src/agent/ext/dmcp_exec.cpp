@@ -194,8 +194,8 @@ bool BreakAddress(const JsonValue& params, Address* address, std::string* source
         return true;
     }
     if (ParamU64(params, "linear", &linear) && linear <= 0xFFFFFFFFull) {
-        char buffer[16];
-        std::snprintf(buffer, sizeof(buffer), "l:%08X", static_cast<unsigned>(linear));
+        char buffer[16]; // global snprintf: cross.h maps it to _snprintf on MSVC (std::snprintf would break)
+        snprintf(buffer, sizeof(buffer), "l:%08X", static_cast<unsigned>(linear));
         *source = buffer;
         return ParseAddress(buffer, address, error);
     }
