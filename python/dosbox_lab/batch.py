@@ -98,10 +98,22 @@ def _screen(inst):
     return str(path)
 
 
-def run_batch(mounts, command, timeout_s=60.0, max_output=STANDARD_MAX_OUTPUT, conf=None, exe=None):
+def _read_text(path):
+    try:
+        return path.read_bytes().decode("cp437")
+    except OSError:
+        return ""
+
+
+def run_batch(mounts, command, timeout_s=60.0, max_output=STANDARD_MAX_OUTPUT, conf=None, exe=None, watch=None,
+              snapshot=True):
     """Run `command` (program, batch file or shell command) in its own headless instance.
     mounts: list of Mount (the first one is the current drive).
-    Result: dict, status done/timeout/shell_exited/crashed."""
+    watch: optional callable, called while the command runs (every poll, about 50 ms) with the captured stdout so far
+    (text, code page 437); when it returns True the instance is stopped and the status is "stopped".
+    snapshot=False skips listing the files of the writable mounts before and after ("files" is then empty and
+    "files_complete" False), for callers that track their files themselves.
+    Result: dict, status done/timeout/stopped/shell_exited/crashed."""
     if not isinstance(command, str) or not command.strip() or "\n" in command or "\r" in command:
         raise DmcpError("bad_argument", "command must be a single, non-empty command line")
     if not command.isascii():
@@ -115,7 +127,9 @@ def run_batch(mounts, command, timeout_s=60.0, max_output=STANDARD_MAX_OUTPUT, c
     merged = {section: dict(values) for section, values in STANDARD_CONF.items()}
     for section, values in (conf or {}).items():
         merged.setdefault(section, {}).update(values)
-    before, full_before = _snapshot_files(mounts)
+    if watch is not None and not callable(watch):
+        raise DmcpError("bad_argument", "watch must be callable")
+    before, full_before = _snapshot_files(mounts) if snapshot else ({}, False)
     autoexec = [f"@Z:\\DMCPBAT.COM START {max_output}", f"@CALL {command}", "@Z:\\DMCPBAT.COM END"]
     started = time.monotonic()
     inst = Instance.start(mounts=list(mounts), autoexec=autoexec, headless=True, exe=exe, conf=merged)
@@ -140,6 +154,9 @@ def run_batch(mounts, command, timeout_s=60.0, max_output=STANDARD_MAX_OUTPUT, c
             if batch["done"]:
                 status = "done"
                 break
+            if watch is not None and watch(_read_text(inst.outdir / "stdout.txt")):
+                status = "stopped"
+                break
             if time.monotonic() >= deadline:
                 break
             time.sleep(0.05)
@@ -158,7 +175,7 @@ def run_batch(mounts, command, timeout_s=60.0, max_output=STANDARD_MAX_OUTPUT, c
     finally:
         inst.stop()
     out, err = inst.outdir / "stdout.txt", inst.outdir / "stderr.txt"
-    after, full_after = _snapshot_files(mounts)
+    after, full_after = _snapshot_files(mounts) if snapshot else ({}, False)
     result.update({
         "status": status,
         "exit_code": (batch["exit_code"] if status == "done"
