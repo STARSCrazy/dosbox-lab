@@ -12,7 +12,7 @@ jobs:
       actions: write  # for styfle/cancel-workflow-action to cancel/stop running workflows
       contents: read  # for actions/checkout to fetch code
     if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Cancel previous runs
         uses: styfle/cancel-workflow-action@0.13.1
@@ -530,6 +530,10 @@ jobs:
           mkdir -p "$appdir/usr/share/icons/hicolor/256x256/apps"
           cp "$top/contrib/icons/dosbox-x.svg" \
              "$appdir/usr/share/icons/hicolor/256x256/apps/dosbox-x.svg"
+          # DOSBOX-LAB: appimagetool needs a PNG/XPM icon at the top of the AppDir to create .DirIcon
+          mkdir -p "$appdir/usr/share/icons/hicolor/48x48/apps"
+          cp "$top/contrib/icons/dosbox-x.png" "$appdir/usr/share/icons/hicolor/48x48/apps/dosbox-x.png"
+          cp "$top/contrib/icons/dosbox-x.png" "$appdir/dosbox-x.png"
           
           cat > "$appdir/dosbox-x.desktop" <<'EOF'
           [Desktop Entry]

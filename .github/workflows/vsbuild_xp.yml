@@ -77,8 +77,8 @@ jobs:
         shell: pwsh
         run: |
           msbuild -m vs/dosbox-x.sln -t:dosbox-x:Rebuild -p:Configuration="Release SDL2" -p:Platform=x64
-          if (-not(Test-Path -Path bin\x64\"Release SDL2"\dosbox-x.exe -PathType Leaf)) {exit 1}
-          contrib\windows\installer\PatchPE.exe bin\x64\"Release SDL2"\dosbox-x.exe
+          if (-not(Test-Path -Path bin\x64\"Release SDL2"\dosbox-lab.exe -PathType Leaf)) {exit 1}
+          contrib\windows\installer\PatchPE.exe bin\x64\"Release SDL2"\dosbox-lab.exe
       - name: Package Visual Studio build for WinXP
         shell: bash
         run: |
@@ -94,11 +94,11 @@ jobs:
           cp $top/bin/Win32/Release/dosbox-x.exe $top/package/dosbox-x_XPx86_SDL1.exe
           cp $top/bin/Win32/"Release SDL2"/dosbox-x.exe $top/package/dosbox-x_XPx86_SDL2.exe
           cp $top/bin/x64/Release/dosbox-x.exe $top/package/dosbox-x_XPx64_SDL1.exe
-          cp $top/bin/x64/"Release SDL2"/dosbox-x.exe $top/package/dosbox-x_XPx64_SDL2.exe
+          cp $top/bin/x64/"Release SDL2"/dosbox-lab.exe $top/package/dosbox-x_XPx64_SDL2.exe
           cp $top/bin/Win32/Release/dosbox-x.exe $top/vs-bin/dosbox-x_XPx86_SDL1.exe
           cp $top/bin/Win32/"Release SDL2"/dosbox-x.exe $top/vs-bin/dosbox-x_XPx86_SDL2.exe
           cp $top/bin/x64/Release/dosbox-x.exe $top/vs-bin/dosbox-x_XPx64_SDL1.exe
-          cp $top/bin/x64/"Release SDL2"/dosbox-x.exe $top/vs-bin/dosbox-x_XPx64_SDL2.exe
+          cp $top/bin/x64/"Release SDL2"/dosbox-lab.exe $top/vs-bin/dosbox-x_XPx64_SDL2.exe
           sed -e 's/^\(output[ ]*=[ ]*\)default$/\1ttf/;s/^\(windowposition[ ]*=\)[ ]*-/\1 /;s/^\(file access tries[ ]*=[ ]*\)0$/\13/;s/^\(printoutput[ ]*=[ ]*\)png$/\1printer/;s/\(drive data rate limit[ ]*=[ ]*\)-1$/\10/' $top/dosbox-x.reference.conf>$top/package/dosbox-x.conf
           cp $top/CHANGELOG $top/package/CHANGELOG.txt
           cp $top/dosbox-x.reference.conf $top/package/dosbox-x.reference.conf
