@@ -530,6 +530,10 @@ jobs:
           mkdir -p "$appdir/usr/share/icons/hicolor/256x256/apps"
           cp "$top/contrib/icons/dosbox-x.svg" \
              "$appdir/usr/share/icons/hicolor/256x256/apps/dosbox-x.svg"
+          # DOSBOX-LAB: appimagetool needs a PNG/XPM icon at the top of the AppDir to create .DirIcon
+          mkdir -p "$appdir/usr/share/icons/hicolor/48x48/apps"
+          cp "$top/contrib/icons/dosbox-x.png" "$appdir/usr/share/icons/hicolor/48x48/apps/dosbox-x.png"
+          cp "$top/contrib/icons/dosbox-x.png" "$appdir/dosbox-x.png"
           
           cat > "$appdir/dosbox-x.desktop" <<'EOF'
           [Desktop Entry]
