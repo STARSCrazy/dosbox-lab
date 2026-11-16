@@ -95,6 +95,28 @@ class RunBatchTest(unittest.TestCase):
         with self.assertRaises(DmcpError):
             Instance.attach(r["instance"])
 
+    def test_watch_sees_output_and_stops(self):
+        work = batch_workdir(self)
+        (work / "VIDEO.COM").write_bytes((TESTPROGS / "VIDEO.COM").read_bytes())
+        write_bat(work / "H.BAT", "@ECHO OFF", "ECHO BEFORE", "VIDEO")
+        seen = []
+
+        def watch(stdout):
+            seen.append(stdout)
+            return "BEFORE" in stdout
+
+        r = run_batch([Mount("C", str(work))], "H", timeout_s=60, watch=watch)
+        self.assertEqual(r["status"], "stopped")
+        self.assertEqual(r["stdout_text"], "BEFORE\r\n")
+        self.assertEqual(seen[-1], "BEFORE\r\n")
+        self.assertLess(r["runtime_s"], 30)  # stopped by the watch, not by timeout_s
+
+    def test_watch_that_never_stops_changes_nothing(self):
+        work = batch_workdir(self)
+        r = run_batch([Mount("C", str(work))], "BATCH", timeout_s=30, watch=lambda stdout: False, snapshot=False)
+        self.assertEqual((r["status"], r["exit_code"], r["stdout_text"]), ("done", 7, "ABTTY\r\n"))
+        self.assertEqual((r["files"], r["files_complete"]), ([], False))
+
     def test_parallel_runs(self):
         works = [batch_workdir(self) for _ in range(3)]
         with ThreadPoolExecutor(3) as pool:
@@ -108,7 +130,7 @@ class RunBatchTest(unittest.TestCase):
         mounts = [Mount("C", str(batch_workdir(self)))]
         for kwargs in ({"command": ""}, {"command": "  "}, {"command": "A\nB"}, {"command": "BATCH", "timeout_s": 0},
                        {"command": "BATCH", "max_output": 0}, {"command": "BATCH ä"},
-                       {"command": "BATCH ─"}):
+                       {"command": "BATCH ─"}, {"command": "BATCH", "watch": 1}):
             with self.subTest(kwargs=kwargs), self.assertRaises(DmcpError) as ctx:
                 run_batch(mounts, **kwargs)
             self.assertEqual(ctx.exception.code, "bad_argument")

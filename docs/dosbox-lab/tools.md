@@ -15,6 +15,8 @@ Memory reads list pages that are not plain memory (the VGA window A0000-BFFFF, u
 - `dosbox_stop` - stop an instance.
 - `dosbox_list` - list known instances.
 - `run_batch` - run one DOS command in a throwaway headless instance and return its captured output and status.
+  The Python function also takes `watch` (called with the stdout so far while the command runs; True stops the
+  instance, status `stopped`) and `snapshot=False` (no listing of the mounted files before and after).
 
 ## Execution control
 - `emu_status` - paused or running, why stopped, CS:EIP, mode.
