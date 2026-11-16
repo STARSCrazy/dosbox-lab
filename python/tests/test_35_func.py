@@ -391,7 +391,7 @@ class FuncCoreTest(unittest.TestCase):
         try:
             with self.assertRaises(DmcpError) as ctx:
                 box.func_run("does_not_exist.sav")
-            self.assertEqual(ctx.exception.code, "bad_argument")
+            self.assertEqual(ctx.exception.code, "unsupported_core")
             self.assertIn("core", ctx.exception.message)
         finally:
             box.stop()

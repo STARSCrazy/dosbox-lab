@@ -90,7 +90,7 @@ class MouseProgramTest(unittest.TestCase):
 
 
 class MouseProgramStepTest(unittest.TestCase):
-    """B8: A remaining distance up to half the learned step counts as reached (with a hint)."""
+    """A remaining distance up to half the learned step counts as reached (with a hint)."""
 
     def test_factor_two_odd_target_reaches_with_hint(self):
         fake = FakeMouse(x=300, y=100, fx=2.0, fy=2.0)

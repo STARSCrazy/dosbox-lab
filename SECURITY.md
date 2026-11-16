@@ -2,7 +2,7 @@
 
 ## Scope
 
-dosbox-lab adds a control channel to DOSBox-X (a local RPC transport, a named pipe on Windows, and a Python package with an MCP server over stdio). This channel can read and write emulator memory, start programs and access host folders that are mounted into the emulator. Run it only on your own machine and connect only clients you trust.
+dosbox-lab adds a control channel to DOSBox-X (a local RPC transport: a named pipe on Windows, a Unix domain socket with mode 0600 in a private run folder on Linux; and a Python package with an MCP server over stdio). This channel can read and write emulator memory, start programs and access host folders that are mounted into the emulator. Run it only on your own machine and connect only clients you trust.
 
 ## Supported versions
 

@@ -185,7 +185,7 @@ bool SetSegments(const std::string& module, std::vector<ModuleSegment> segments,
     }
     Module& m = GetOrCreateModule(Upper(module));
     if (!m.segments.empty() && static_cast<int>(m.segments.front().origin) < static_cast<int>(origin)) {
-        *applied = false; // a stronger mapping exists (spec rule 3)
+        *applied = false; // a stronger mapping exists (see Origin)
         return true;
     }
     m.segments = segments;
@@ -382,7 +382,7 @@ void RegisterModules()
         Set(result, "module", Str(m->name));
         Set(result, "applied", Bool(applied));
         if (!applied)
-            Set(result, "hint", Str("the symbol file mapping of this module has priority (spec rule 3)"));
+            Set(result, "hint", Str("the symbol file mapping of this module has priority"));
         Set(result, "module_info", ModuleJson(*m));
         return true;
     });

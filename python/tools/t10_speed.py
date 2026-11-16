@@ -1,6 +1,6 @@
 """Measure the slowdown: DEBUG.COM for 5 s each, increase of value (16 bit, wrap-arounds counted).
 
-Call (from python/): C:/Python314/python.exe tools/t10_speed.py [cycles]   (default cycles=max; stage 3 acceptance)
+Call (from python/): python tools/t10_speed.py [cycles]   (default cycles=max)
 """
 import sys
 import time
@@ -34,34 +34,36 @@ def measure():
     return total / (time.monotonic() - t0), maxd
 
 
-time.sleep(2)
-result = {}
-for _round in range(2):
-    a = measure()
-    result.setdefault("a without hook", []).append(a)
+try:
+    time.sleep(2)
+    result = {}
+    for _round in range(2):
+        a = measure()
+        result.setdefault("a without hook", []).append(a)
 
-    box.break_add(f"r:{psp:04X}:010A", condition="eax==0xDEADBEEF")
-    b = measure()
-    bl = box.break_list()
-    box.break_remove(all=True)
-    result.setdefault("b breakpoint never true", []).append(b)
-    assert not box.status()["paused"], "breakpoint halted"
+        box.break_add(f"r:{psp:04X}:010A", condition="eax==0xDEADBEEF")
+        b = measure()
+        bl = box.break_list()
+        box.break_remove(all=True)
+        result.setdefault("b breakpoint never true", []).append(b)
+        assert not box.status()["paused"], "breakpoint halted"
 
-    w = box.watch_add("l:200000", length=4, kind="both", action="log")
-    c = measure()
-    wl = box.watch_list()
-    box.watch_remove(all=True)
-    result.setdefault("c watchpoint on foreign page", []).append(c)
+        w = box.watch_add("l:200000", length=4, kind="both", action="log")
+        c = measure()
+        wl = box.watch_list()
+        box.watch_remove(all=True)
+        result.setdefault("c watchpoint on foreign page", []).append(c)
 
-    box.call("emu.run_until", expression="eax==0xDEADBEEF")
-    d = measure()
-    st = box.call("emu.pause")
-    box.resume()
-    result.setdefault("d run_until expression", []).append(d)
+        box.call("emu.run_until", expression="eax==0xDEADBEEF")
+        d = measure()
+        st = box.call("emu.pause")
+        box.resume()
+        result.setdefault("d run_until expression", []).append(d)
 
-print("cycles", cycles, "break_list", bl.get("entries"), "watch", wl)
-base = sum(x[0] for x in result["a without hook"]) / 2
-for k, v in result.items():
-    rate = sum(x[0] for x in v) / len(v)
-    print(f"{k:28s} {rate/1e3:10.1f} k/s  factor {base/rate:5.2f}  ({rate/base*100:5.1f} %)  max_delta {max(x[1] for x in v)}  single {[round(x[0]/1e3,1) for x in v]}")
-box.stop()
+    print("cycles", cycles, "break_list", bl.get("entries"), "watch", wl)
+    base = sum(x[0] for x in result["a without hook"]) / 2
+    for k, v in result.items():
+        rate = sum(x[0] for x in v) / len(v)
+        print(f"{k:28s} {rate/1e3:10.1f} k/s  factor {base/rate:5.2f}  ({rate/base*100:5.1f} %)  max_delta {max(x[1] for x in v)}  single {[round(x[0]/1e3,1) for x in v]}")
+finally:  # never leave the emulator running (assertion, Ctrl+C)
+    box.stop()

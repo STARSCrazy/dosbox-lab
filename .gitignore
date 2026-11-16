@@ -149,3 +149,6 @@ contrib/macos/dosbox-x.plist
 /.runs/
 /python/**/__pycache__/
 /testprogs/*.lst
+
+# dosbox-lab: editable install metadata
+*.egg-info/

@@ -1,3 +1,9 @@
+// DOSBOX-LAB hook: config.h first for autotools builds, which define C_DEBUG/C_DOSBOX_AGENT/C_DMCP there.
+// Not for MSVC: build.ps1 passes them on the command line, and vs/config.h would pin _WIN32_WINNT to XP
+// before the Windows headers (no IFileDialog, no CancelIoEx).
+#if !defined(_MSC_VER)
+#include "config.h"
+#endif
 #if defined(C_DEBUG) && defined(C_DOSBOX_AGENT)
 #include "dosbox.h"
 #include "agent/debugger_adapter.h"

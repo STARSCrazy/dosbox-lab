@@ -305,6 +305,16 @@ int ButtonIndex(const std::string& name)
 
 } // namespace
 
+void InputOnStateLoad(double before_ms)
+{
+    // Due times are PIC_FullIndex() values, which jump with the loaded state: keep the remaining delays.
+    const double shift = PIC_FullIndex() - before_ms;
+    for (KeyEvent& event : g_queue)
+        event.due_ms += shift;
+    if (g_next_free_ms != 0.0)
+        g_next_free_ms += shift;
+}
+
 void InputTick()
 {
     if (g_queue.empty())
@@ -357,6 +367,8 @@ void RegisterInput()
         uint64_t gap = 40;
         if (!ParamStr(params, "text", &text))
             return Fail(error, "bad_argument", "parameter text is required");
+        if (g_queue.size() + text.size() * 4 > 200000) // a few events per character; keeps the queue bounded
+            return Fail(error, "bad_argument", "too much queued input (wait_input first, or type shorter texts)");
         ParamStr(params, "layout", &layout);
         if (layout != "de" && layout != "us")
             return Fail(error, "bad_argument", "layout must be de or us");
@@ -492,7 +504,7 @@ void RegisterInput()
     Register("input.own", [](const JsonValue& params, JsonValue* result, Error* error) {
         bool on = true;
         if (!ParamBool(params, "on", &on))
-            return Fail(error, "bad_argument", "parameter an (bool) is required");
+            return Fail(error, "bad_argument", "parameter on (bool) is required");
         g_input_owned = on;
         if (!on)
             ReleaseAll(); // handing over: no queued presses or held keys may linger

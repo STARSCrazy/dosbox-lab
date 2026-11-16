@@ -23,6 +23,8 @@
 #include <string>
 #include <vector>
 
+bool CPU_IsHLTed(void); // cpu.cpp: guest executed HLT and waits for an interrupt
+
 Bitu FillFlags(void);
 
 bool DMCP_irq_hold = false; // pic.cpp: hardware IRQs wait while a func run holds them
@@ -30,7 +32,7 @@ bool DMCP_irq_hold = false; // pic.cpp: hardware IRQs wait while a func run hold
 namespace dmcp {
 namespace {
 
-// D31: one recorded call, run again from its savestate up to the return.
+// One recorded call, run again from its savestate up to the return.
 struct Run {
     bool active = false;   // running; the result is measured at the next stop (StopAt)
     bool finished = false; // result is ready
@@ -74,7 +76,7 @@ Run g;
 
 uint32_t CurrentSp() { return reg_esp & cpu.stack.mask; }
 
-// Same register set as calls.jsonl (D29).
+// Same register set as calls.jsonl.
 JsonValue RegsJson()
 {
     JsonValue r = JsonValue::Object();
@@ -492,6 +494,15 @@ void Finish()
 
 bool FuncActive() { return g.active; }
 
+bool FuncHaltsForever()
+{
+    // HLT waits for an IRQ that the run holds back: no instruction would ever execute again.
+    if (!g.active || !g.end.empty() || !DMCP_irq_hold || !CPU_IsHLTed())
+        return false;
+    g.end = "hlt";
+    return true;
+}
+
 bool FuncShouldStop()
 {
     if (!g.active)
@@ -578,12 +589,14 @@ void RegisterFunc()
         const Section_prop* cpu_section = static_cast<Section_prop*>(control->GetSection("cpu"));
         const std::string core = cpu_section != nullptr ? cpu_section->Get_string("core") : "";
         if (core != "normal")
-            return Fail(error, "bad_argument", "func.start needs core=normal (configured: core=" + core + ")");
+            return Fail(error, "unsupported_core", "func.start needs core=normal (configured: core=" + core + ")");
+        if (!RequireHookCore("func.start", error))
+            return false;
         std::string state, name = "func";
         if (!ParamStr(params, "state", &state) || state.empty())
             return Fail(error, "bad_argument", "state (path of a .sav written by calls states) is required");
         if (Param(params, "name") != nullptr &&
-            (!ParamStr(params, "name", &name) || name.empty() || name.find_first_of("\\/:*?\"<>|") != std::string::npos))
+            (!ParamStr(params, "name", &name) || !PlainName(name)))
             return Fail(error, "bad_argument", "name must be a plain file name without path characters");
         uint64_t max_insn = 10000000;
         if (Param(params, "max_instructions") != nullptr && (!ParamU64(params, "max_instructions", &max_insn) || max_insn == 0))

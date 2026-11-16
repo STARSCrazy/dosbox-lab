@@ -10,7 +10,7 @@
 
 namespace dmcp {
 
-// Origin of a va mapping; the lower value wins (spec rule 3).
+// Origin of a va mapping; the lower value wins (symbol file segments over symbol file base over set over derived).
 enum class Origin : int { SymbolsSegments = 1, SymbolsBase = 2, Set = 3, Derived = 4 };
 
 struct ModuleSegment {
@@ -29,7 +29,7 @@ struct Symbol {
     std::string kind;
 };
 
-// D27: LE objects of the executed file and their derived placement (dmcp_le.cpp).
+// LE objects of the executed file and their derived placement (dmcp_le.cpp).
 struct LeObject {
     uint32_t va_start = 0; // relocation base address of the object
     uint32_t size = 0;     // virtual size
@@ -63,7 +63,7 @@ struct Module {
     uint32_t csip = 0;                   // entry point seg:off (high word segment)
     uint32_t sssp = 0;                   // initial stack seg:off
     std::string command_line;            // command tail at EXEC
-    LeInfo le;                           // D27, only for EXEs with an LE header
+    LeInfo le;                           // only for EXEs with an LE header
 };
 
 std::vector<Module>& Modules();

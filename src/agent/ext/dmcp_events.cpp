@@ -193,16 +193,6 @@ bool ParseConfig(const JsonValue& params, Config* cfg, Error* error)
     return true;
 }
 
-std::string CommandTail(uint16_t psp)
-{
-    const uint8_t len = real_readb(psp, 0x80);
-    std::string tail;
-    for (uint8_t i = 0; i < len && i < 127; ++i) {
-        const uint8_t c = real_readb(psp, static_cast<uint16_t>(0x81 + i));
-        tail.push_back(c >= 0x20 && c < 0x7F ? static_cast<char>(c) : '?');
-    }
-    return tail;
-}
 
 std::string SegOff(uint32_t realpt)
 {
@@ -267,7 +257,7 @@ void EventOnExec(const std::string& path, uint16_t flags, bool com, uint16_t psp
     Set(&event, "paragraphs", HexOut(paragraphs, 4, true));
     if (!overlay) {
         Set(&event, "rel_base", HexOut(com ? psp : load_seg, 4, true));
-        Set(&event, "command_line", Str(CommandTail(psp)));
+        Set(&event, "command_line", Str(CommandTailOf(psp)));
         Set(&event, "entry", Str(SegOff(csip)));
         Set(&event, "stack", Str(SegOff(sssp)));
     } else {
@@ -283,8 +273,7 @@ void RegisterEvents()
         if (!ParseConfig(params, &cfg, error))
             return false;
         std::string name = "events";
-        if (Param(params, "name") != nullptr && (!ParamStr(params, "name", &name) || name.empty() ||
-                                                 name.find_first_of("\\/:*?\"<>|") != std::string::npos))
+        if (Param(params, "name") != nullptr && (!ParamStr(params, "name", &name) || !PlainName(name)))
             return Fail(error, "bad_argument", "name must be a plain file name without path characters");
         if (g_active)
             StopEvents(false);

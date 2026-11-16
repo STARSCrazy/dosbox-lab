@@ -10,7 +10,7 @@
 // Emulation thread. True while breakpoints, a pause condition or a recording need the per-instruction hook.
 // The normal core and CPU_Interrupt test it inline, so an idle agent costs one load per instruction.
 extern bool DMCP_hook_active;
-// Emulation thread. True while a func run (D31) holds hardware IRQs back (checked in PIC_runIRQs).
+// Emulation thread. True while a function re-run holds hardware IRQs back (checked in PIC_runIRQs).
 extern bool DMCP_irq_hold;
 
 // Transport thread: handles dosbox-lab methods. Returns false if the method is not ours.

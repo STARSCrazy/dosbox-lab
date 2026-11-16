@@ -45,7 +45,8 @@ class MemTest(unittest.TestCase):
         data = Path(info["path"]).read_bytes()
         self.assertEqual(len(data), 0x100000)
         self.assertEqual(info["sha256"], hashlib.sha256(data).hexdigest())
-        self.assertEqual(info["missing"], [])
+        # The VGA window is device memory, not RAM: listed as missing instead of returning stale RAM.
+        self.assertEqual(info["missing"], [["000A0000", "000C0000"]])
         self.assertIn(MARK, data)
         self.assertTrue(Path(info["json_path"]).exists())
 
@@ -69,9 +70,11 @@ class MemTest(unittest.TestCase):
         info = self.box.mem_read_info("l:00FFFFF8", 16)   # half inside, half outside
         self.assertEqual(info["missing"], [["01000000", "01000008"]])
         self.assertEqual(info["hex"][16:], "00" * 8)
-        info = self.box.mem_read_info("p:FFFFF000", 16)
-        self.assertEqual(info["missing"], [["FFFFF000", "FFFFF010"]])
+        info = self.box.mem_read_info("p:FFFE0000", 16)
+        self.assertEqual(info["missing"], [["FFFE0000", "FFFE0010"]])
         self.assertEqual(info["hex"], "00" * 16)
+        # The top 64 KB alias the BIOS ROM (reset vector at FFFFFFF0), like on real hardware.
+        self.assertEqual(self.box.mem_read("p:FFFFFFF0", 16), self.box.mem_read("p:000FFFF0", 16))
         dump = self.box.mem_dump("p:00FFF000", 0x2000, "ram_end")
         self.assertEqual(dump["missing"], [["01000000", "01001000"]])
         self.assertIn("hint", dump)
@@ -81,7 +84,7 @@ class MemTest(unittest.TestCase):
             self.assertEqual(ctx.exception.code, "bad_address", addr)
 
     def test_search_ignores_missing_pages(self):
-        # The range extends past the end of RAM (01000000): missing bytes read as 0 but must not match (B3).
+        # The range extends past the end of RAM (01000000): missing bytes read as 0 but must not match.
         res = self.box.call("mem.search", address="l:00FF0000", length=0x20000, hex="00000000", max_hits=1000000)
         for hit in res["hits"]:
             self.assertLessEqual(int(hit["linear"], 16), 0x01000000 - 4, hit)
@@ -89,10 +92,14 @@ class MemTest(unittest.TestCase):
         self.assertEqual(self.box.mem_search("l:01000000", 0x1000, b"\x00\x00\x00\x00"), [])
 
     def test_search_top_of_address_space(self):
-        # The missing range ends at 2^32 (end stored as 00000000): still no false match.
-        res = self.box.call("mem.search", address="l:FFFF0000", length=0x10000, hex="00000000")
+        # Unmapped space below the BIOS alias: missing, no false match.
+        res = self.box.call("mem.search", address="l:FFFE0000", length=0x10000, hex="00000000")
         self.assertEqual(res["hits"], [])
-        self.assertTrue(res["missing"])
+        self.assertEqual(res["missing"], [["FFFE0000", "FFFF0000"]])
+        # Up to 2^32 (BIOS alias): every hit is real.
+        res = self.box.call("mem.search", address="l:FFFF0000", length=0x10000, hex="00000000", max_hits=5)
+        for hit in res["hits"]:
+            self.assertEqual(self.box.mem_read("l:" + hit["linear"], 4), bytes(4), hit)
 
     def test_search_large_missing_region_is_fast(self):
         start = time.monotonic()

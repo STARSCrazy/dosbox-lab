@@ -1,7 +1,8 @@
 # File formats
 
 Recordings are written into the instance's output folder. Format names carry a version (`/1`). Files written by
-earlier versions used the prefix `dosbox-mcp-` instead of `dosbox-lab-`; readers accept both.
+earlier versions used the prefix `dosbox-mcp-` instead of `dosbox-lab-`. Only symbol files and scenarios are still read
+in their old formats (see [MIGRATION.md](MIGRATION.md)); old recordings are not converted.
 
 | Format / file | Purpose |
 |---|---|

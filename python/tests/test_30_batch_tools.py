@@ -4,8 +4,12 @@ import sys
 import unittest
 from pathlib import Path
 
-from dosbox_lab import mcp_server
 from tests.util import TESTPROGS, batch_workdir, need_build
+
+try:
+    from dosbox_lab import mcp_server
+except ImportError:  # the mcp package is not installed: the test classes below are skipped
+    mcp_server = None
 
 PYDIR = Path(__file__).resolve().parents[1]
 

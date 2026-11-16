@@ -1441,6 +1441,18 @@ dnl FEATURE: RPC debugger agent output support
 AH_TEMPLATE(C_DOSBOX_AGENT,[Define to 1 to use RPC debugger agent support])
 AC_ARG_ENABLE(dosbox_agent,AC_HELP_STRING([--enable-dosbox_agent],[Enable RPC debugger agent support]),enable_dosbox_agent=$enableval,enable_dosbox_agent=no)
 
+dnl DOSBOX-LAB hook: the dosbox-lab control extension (src/agent/ext), needs the debugger and the agent
+AH_TEMPLATE(C_DMCP,[Define to 1 to enable the dosbox-lab control extension])
+AC_ARG_ENABLE(dmcp,AC_HELP_STRING([--enable-dmcp],[Enable the dosbox-lab control extension (implies --enable-dosbox_agent, needs --enable-debug)]),enable_dmcp=$enableval,enable_dmcp=no)
+if test x$enable_dmcp = xyes; then
+    if test "x$enable_debug" = xno -o "x$enable_debug" = x; then
+        AC_MSG_ERROR([--enable-dmcp needs --enable-debug])
+    fi
+    enable_dosbox_agent=yes
+    AC_DEFINE([C_DMCP], [1])
+    AC_MSG_NOTICE([enabled the dosbox-lab control extension])
+fi
+
 dnl FEATURE: RPC debugger agent output support
 if test x$enable_dosbox_agent = xyes; then
     AC_DEFINE([C_DOSBOX_AGENT], [1])

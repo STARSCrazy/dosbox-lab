@@ -7,6 +7,8 @@
 #include "agent/dmcp.h"
 #include "callback.h"
 #include "cpu.h"
+#include "control.h"
+#include "setup.h"
 #include "regs.h"
 #include "pic.h"
 #include "video.h"
@@ -57,8 +59,8 @@ uint8_t g_stop_int = 0;
 uint16_t g_stop_ax = 0;
 // Skip flag for the instruction we resume at: no checks there (breakpoints, stop condition). emu.continue sets it
 // only after a stop decided at this very instruction (it must not hit twice; after a watch/pause/frame/step stop
-// the instruction is checked once). run_until/step_over/frame_step from a paused state always set it (E4: at
-// least one instruction).
+// the instruction is checked once). run_until/step_over/frame_step from a paused state always set it (they
+// run at least one instruction).
 bool g_skip_break_once = false;
 uint32_t g_skip_linear = 0; // the instruction the skip flag applies to (an IRQ handler may run first)
 // True while StepOne runs. A callback (DOS/BIOS service) may re-enter DOSBOX_RunMachine via
@@ -84,7 +86,7 @@ struct Until {
     Expr expr;
 };
 Until g_until;
-uint64_t g_frames = 0; // finished frames since start (D35)
+uint64_t g_frames = 0; // finished frames since start
 
 bool UntilMet(uint32_t here)
 {
@@ -129,6 +131,7 @@ JsonValue StatusObject()
     Set(&result, "halted", Bool(CPU_IsHLTed()));
     Set(&result, "pmode", Bool(cpu.pmode));
     Set(&result, "instruction_hook", Bool(DMCP_hook_active));
+    Set(&result, "hook_core", Bool(HookCoreActive())); // false: breakpoints, stepping and recordings cannot work
     Set(&result, "func", Bool(FuncActive()));
     Set(&result, "cs", Hex(SegValue(cs), 4));
     Set(&result, "eip", Hex(reg_eip, 8));
@@ -191,8 +194,8 @@ bool BreakAddress(const JsonValue& params, Address* address, std::string* source
         return true;
     }
     if (ParamU64(params, "linear", &linear) && linear <= 0xFFFFFFFFull) {
-        char buffer[16];
-        std::snprintf(buffer, sizeof(buffer), "l:%08X", static_cast<unsigned>(linear));
+        char buffer[16]; // global snprintf: cross.h maps it to _snprintf on MSVC (std::snprintf would break)
+        snprintf(buffer, sizeof(buffer), "l:%08X", static_cast<unsigned>(linear));
         *source = buffer;
         return ParseAddress(buffer, address, error);
     }
@@ -215,7 +218,7 @@ bool OptionalByte(const JsonValue& params, const char* name, int* out, Error* er
 bool IntAt(uint32_t linear, uint8_t* vector)
 {
     if ((!cpu.pmode || GETFLAG(VM)) && SegValue(cs) == CB_SEG)
-        return false; // internal INT stubs of the emulator's own BIOS/DOS (as the int log, stage-2 E6)
+        return false; // internal INT stubs of the emulator's own BIOS/DOS (as the int log)
     uint8_t b = 0;
     uint32_t i = 0;
     for (; i < 15; ++i) {
@@ -275,7 +278,7 @@ bool StopDecidedHere(const std::string& reason)
            reason == "pmode";
 }
 
-// Resume after arming a stop condition: nothing is checked at the current instruction (E4).
+// Resume after arming a stop condition: nothing is checked at the current instruction.
 void ResumeArmed()
 {
     const bool was_paused = g_paused;
@@ -296,8 +299,8 @@ void StopAt(const std::string& reason)
 {
     g_paused = true;
     g_stop_reason = reason;
-    g_skip_break_once = false; // a stop never leaves the skip flag behind (stage-2 parked point)
-    FuncOnStop();              // D31: a running func measures its result at any stop
+    g_skip_break_once = false; // a stop never leaves the skip flag behind
+    FuncOnStop();              // a running func measures its result at any stop
 }
 
 void Resume()
@@ -338,6 +341,24 @@ void ExecOnFrame()
     }
 }
 
+bool HookCoreActive()
+{
+    const CPU_Decoder* decoder = CPU_IsHLTed() ? cpu.hlt.old_decoder : cpudecoder;
+    return decoder == &CPU_Core_Normal_Run || decoder == &CPU_Core_Normal_Trap_Run;
+}
+
+bool RequireHookCore(const char* what, Error* error)
+{
+    // core=auto starts on the normal core and switches to the dynamic core in protected mode later.
+    const Section_prop* cpu_section = static_cast<Section_prop*>(control->GetSection("cpu"));
+    const std::string core = cpu_section != nullptr ? cpu_section->Get_string("core") : "";
+    if (core == "normal" && HookCoreActive())
+        return true;
+    return Fail(error, "unsupported_core", std::string(what) + " needs the normal CPU core ([cpu] core=normal and a "
+                "386 or newer cputype without prefetch; configured: core=" + core + "): other cores never call the "
+                "instruction hook, so breakpoints, stepping and recordings would silently not work");
+}
+
 void UpdateHookActive()
 {
     const bool needed = !g_breakpoints.empty() || !g_int_breakpoints.empty() || (g_until.active && g_until.frames_left == 0) ||
@@ -357,6 +378,8 @@ void RegisterExec()
         std::string until;
         if (Param(params, "until") != nullptr && (!ParamStr(params, "until", &until) || until != "pmode"))
             return Fail(error, "bad_argument", "until must be \"pmode\" (pause at the first protected-mode instruction)");
+        if (until == "pmode" && !RequireHookCore("emu.pause until=pmode", error))
+            return false;
         if (until == "pmode" && !(cpu.pmode && !GETFLAG(VM))) {
             Until u;
             u.reason = "pmode";
@@ -378,6 +401,8 @@ void RegisterExec()
         return true;
     });
     Register("emu.run_until", [](const JsonValue& params, JsonValue* result, Error* error) {
+        if (!RequireHookCore("emu.run_until", error))
+            return false;
         Until u;
         u.reason = "run_until";
         bool flag = false;
@@ -445,6 +470,8 @@ void RegisterExec()
     Register("emu.step", [](const JsonValue& params, JsonValue* result, Error* error) {
         if (!g_paused)
             return Fail(error, "not_paused", "emu.step requires a paused emulator (call emu.pause first)");
+        if (!RequireHookCore("emu.step", error))
+            return false;
         uint64_t count = 1;
         if (Param(params, "count") != nullptr && !ParamU64(params, "count", &count))
             return Fail(error, "bad_argument", "count must be a positive integer");
@@ -497,6 +524,8 @@ void RegisterExec()
     Register("emu.step_over", [](const JsonValue&, JsonValue* result, Error* error) {
         if (!g_paused)
             return Fail(error, "not_paused", "emu.step_over requires a paused emulator (call emu.pause first)");
+        if (!RequireHookCore("emu.step_over", error))
+            return false;
         const CodePoint here = CurrentCodePoint();
         if (!IsStepOverInstruction(here.linear)) {
             g_stop_reason = "step";
@@ -541,6 +570,8 @@ void RegisterExec()
         return true;
     });
     Register("emu.break_add", [](const JsonValue& params, JsonValue* result, Error* error) {
+        if (!RequireHookCore("emu.break_add", error))
+            return false;
         Breakpoint bp;
         if (!BreakAddress(params, &bp.address, &bp.source, error))
             return false;
@@ -635,6 +666,8 @@ void RegisterExec()
 bool DMCP_LoopHook()
 {
     dmcp::InputTick();
+    if (!dmcp::g_paused && dmcp::FuncHaltsForever())
+        dmcp::StopAt("func");
     if (!dmcp::g_paused || dmcp::g_in_step)
         return false; // nested run inside a stepped callback: let it finish
     GFX_Events();

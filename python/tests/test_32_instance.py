@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,7 +24,7 @@ def fake_instance(test, pid):
 
 
 class PidIdentityTest(unittest.TestCase):
-    """B2: a running PID only counts if the process is dosbox-lab.exe."""
+    """A running PID only counts if the process is our emulator."""
 
     def test_foreign_running_process_is_not_alive(self):
         self.assertFalse(_pid_alive(os.getpid()))
@@ -42,6 +43,7 @@ class PidIdentityTest(unittest.TestCase):
         run.assert_not_called()
         self.assertTrue(inst.alive() is False)  # and we are still alive
 
+    @unittest.skipUnless(os.name == "nt", "Windows process image names")
     def test_image_name_check_is_case_insensitive(self):
         with mock.patch("dosbox_lab.instance._image_name", return_value=r"C:\X\DOSBox-Lab.EXE"):
             self.assertTrue(_pid_alive(os.getpid()))
@@ -49,8 +51,23 @@ class PidIdentityTest(unittest.TestCase):
             self.assertFalse(_pid_alive(os.getpid()))
 
 
+@unittest.skipIf(os.name == "nt", "POSIX process names")
+class PosixImageNameTest(unittest.TestCase):
+    def test_emulator_names(self):
+        for name in ("/opt/x/src/dosbox-x", "/usr/bin/dosbox-lab", "/opt/x/src/dosbox-x (deleted)"):
+            with mock.patch("dosbox_lab.instance._posix_image_name", return_value=name):
+                self.assertTrue(_pid_alive(os.getpid()), name)
+        with mock.patch("dosbox_lab.instance._posix_image_name", return_value=None):
+            self.assertFalse(_pid_alive(os.getpid()))
+
+    def test_dead_pid(self):
+        proc = subprocess.Popen(["true"])
+        proc.wait()
+        self.assertFalse(_pid_alive(proc.pid))
+
+
 class StartFailureTest(unittest.TestCase):
-    """B14: an OSError at startup becomes DmcpError(internal), in the CLI too as JSON."""
+    """An OSError at startup becomes DmcpError(internal), in the CLI too as JSON."""
 
     def test_unexecutable_exe(self):
         tmp = Path(tempfile.mkdtemp(prefix="dmcp-exe-"))
@@ -89,7 +106,7 @@ class StartFailureTest(unittest.TestCase):
 
 @need_build
 class RelativeMountTest(unittest.TestCase):
-    """B15: relative host paths are relative to the caller, not to the run folder."""
+    """Relative host paths are relative to the caller, not to the run folder."""
 
     def test_relative_mount_path(self):
         RUNS.mkdir(exist_ok=True)  # same drive as the repo, so that a relative path exists

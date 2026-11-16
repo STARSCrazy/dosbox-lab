@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Emulation problems (DOSBox-X)
+    url: https://github.com/joncampbell123/dosbox-x/issues
+    about: CPU, DOS, hardware, video or sound problems that also occur in plain DOSBox-X
+  - name: Security vulnerability
+    url: https://github.com/STARSCrazy/dosbox-lab/security/advisories/new
+    about: Please report security problems privately

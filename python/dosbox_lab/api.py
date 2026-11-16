@@ -300,11 +300,16 @@ class Dosbox:
         return self.call("input.mouse_button", button=button, pressed=bool(down))
 
     def mouse_click(self, x=None, y=None, button="left", hold_ms=80):
-        if x is not None and y is not None:
+        if (x is None) != (y is None):
+            raise DmcpError("bad_argument", "mouse_click needs both x and y, or neither")
+        if x is not None:
             self.mouse_move(x, y)
         self.mouse_button(button, True)
-        time.sleep(hold_ms / 1000.0)
-        return self.mouse_button(button, False)
+        try:
+            time.sleep(hold_ms / 1000.0)
+        finally:  # never leave the button pressed (Ctrl+C, timeout)
+            result = self.mouse_button(button, False)
+        return result
 
     def mouse_wheel(self, steps):
         return self.call("input.mouse_wheel", steps=steps)
@@ -422,10 +427,10 @@ class Dosbox:
             for event in batch["events"]:
                 if predicate(event):
                     return event
+            if time.monotonic() > end:  # also while other events keep coming
+                raise DmcpError("timeout", "the expected event did not arrive in time")
             if batch["events"]:
                 nr = batch["events"][-1]["nr"]
-            elif time.monotonic() > end:
-                raise DmcpError("timeout", "the expected event did not arrive in time")
             else:
                 time.sleep(0.05)
 
