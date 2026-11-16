@@ -1,7 +1,6 @@
 import ctypes
 import ctypes.util
 import os
-import time
 import unittest
 
 from tests.util import class_box, need_build, start_prog, wait_until
@@ -59,7 +58,11 @@ class MouseTest(unittest.TestCase):
         # Visible window: the real-world case. Do not move the real mouse during this test,
         # otherwise test_real_cursor_untouched rightly fails.
         cls.box = class_box(cls, start_prog("MOUSE.COM", headless=False))
-        time.sleep(1.0)
+        # Ready = mode 13h is set and a finished frame exists (game-pixel coordinates need it); by then
+        # MOUSE.COM has reset the driver and runs its loop. A fixed sleep was too short on a slow runner.
+        wait_until(lambda: cls.box.video_state()["mode"] == "13", timeout=30)
+        cls.box.frame_step(2)
+        cls.box.resume()
 
 
     def test_move_in_game_pixels(self):
